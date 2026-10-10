@@ -1,0 +1,26 @@
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.ipynb_checkpoints/
+*.egg-info/
+dist/
+build/
+.DS_Store
+Thumbs.db
+
+# Ignore raw and processed dataset image files (use download_dataset.py or zip upload)
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+
+# Keep trained weights and class mapping
+!models/ecosort_mobilenetv2.pt
+!models/class_names.json
+!models/.gitkeep
+
+# Keep verified benchmark reports and curves
+!reports/*
+!reports/.gitkeep

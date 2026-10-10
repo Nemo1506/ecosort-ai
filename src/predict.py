@@ -1,0 +1,149 @@
+"""Step 5 - Load the saved model and classify a single image.
+
+Supports ONNX Runtime, PyTorch, and TensorFlow backends.
+Used by the Streamlit app and command line:
+    python src/predict.py path/to/photo.jpg
+"""
+import json
+import sys
+from pathlib import Path
+from typing import Dict, List, Tuple
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+import numpy as np
+from PIL import Image, ImageOps
+
+import config
+
+
+class ModelWrapper:
+    def __init__(self, model_obj, backend: str, class_names: list):
+        self.model = model_obj
+        self.backend = backend
+        self.class_names = class_names
+
+    def predict_probs(self, image: Image.Image) -> np.ndarray:
+        image = ImageOps.exif_transpose(image).convert("RGB")
+        resample = getattr(Image, "Resampling", Image).BILINEAR
+        resized = image.resize((config.IMG_SIZE[1], config.IMG_SIZE[0]), resample)
+        arr = np.asarray(resized, dtype=np.float32)
+
+        if self.backend == "onnx":
+            # ONNX model expects shape (1, 3, 224, 224) normalized with ImageNet mean/std
+            arr = arr / 255.0
+            mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
+            std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+            arr = (arr - mean) / std
+            arr = np.transpose(arr, (2, 0, 1))  # (3, 224, 224)
+            inp = np.expand_dims(arr, axis=0)  # (1, 3, 224, 224)
+            input_name = self.model.get_inputs()[0].name
+            outputs = self.model.run(None, {input_name: inp})[0][0]
+            # Softmax
+            exp_logits = np.exp(outputs - np.max(outputs))
+            return exp_logits / exp_logits.sum()
+
+        elif self.backend == "torch":
+            import torch
+            arr = arr / 255.0
+            mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
+            std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+            arr = (arr - mean) / std
+            arr = np.transpose(arr, (2, 0, 1))
+            inp = torch.tensor(np.expand_dims(arr, axis=0), dtype=torch.float32)
+            self.model.eval()
+            with torch.no_grad():
+                logits = self.model(inp).numpy()[0]
+            exp_logits = np.exp(logits - np.max(logits))
+            return exp_logits / exp_logits.sum()
+
+        elif self.backend == "keras":
+            inp = np.expand_dims(arr, axis=0)  # Keras handles rescaling internally
+            probs = self.model.predict(inp, verbose=0)[0]
+            return probs
+
+        raise ValueError(f"Unknown backend: {self.backend}")
+
+
+def load_model_and_classes() -> Tuple[ModelWrapper, List[str]]:
+    """Return (model_wrapper, class_names). Raises FileNotFoundError if not trained yet."""
+    if config.CLASS_NAMES_PATH.exists():
+        with open(config.CLASS_NAMES_PATH, "r", encoding="utf-8") as f:
+            class_names = json.load(f)
+    else:
+        class_names = list(config.CLASS_NAMES)
+
+    # 1. Check ONNX model (highest speed & cross-platform)
+    if config.MODEL_ONNX_PATH.exists():
+        try:
+            import onnxruntime as ort
+            session = ort.InferenceSession(str(config.MODEL_ONNX_PATH), providers=["CPUExecutionProvider"])
+            return ModelWrapper(session, "onnx", class_names), class_names
+        except Exception as exc:
+            print(f"Warning: Failed to load ONNX model ({exc}), checking other formats...")
+
+    # 2. Check PyTorch model
+    if config.MODEL_PT_PATH.exists():
+        try:
+            import torch
+            import torch.nn as nn
+            import torchvision.models as models
+
+            model = models.mobilenet_v2(weights=None)
+            in_features = model.classifier[1].in_features
+            model.classifier = nn.Sequential(
+                nn.Dropout(p=config.DROPOUT),
+                nn.Linear(in_features, len(class_names))
+            )
+            model.load_state_dict(torch.load(config.MODEL_PT_PATH, map_location="cpu"))
+            model.eval()
+            return ModelWrapper(model, "torch", class_names), class_names
+        except Exception as exc:
+            print(f"Warning: Failed to load PyTorch model ({exc}), checking other formats...")
+
+    # 3. Check Keras model
+    if config.MODEL_PATH.exists():
+        try:
+            from tensorflow import keras
+            model = keras.models.load_model(config.MODEL_PATH)
+            return ModelWrapper(model, "keras", class_names), class_names
+        except Exception as exc:
+            print(f"Warning: Failed to load Keras model: {exc}")
+
+    raise FileNotFoundError(
+        "No trained model found in models/. Please run: python src/train.py"
+    )
+
+
+def predict_image(model_wrapper: ModelWrapper, class_names: List[str], image: Image.Image, top_k: int = 3) -> Dict:
+    """Return {'label', 'confidence', 'top_k': [(label, prob), ...], 'probs': {label: prob}}."""
+    probs = model_wrapper.predict_probs(image)
+    order = np.argsort(probs)[::-1]
+    top = [(class_names[i], float(probs[i])) for i in order[:top_k]]
+    return {
+        "label": top[0][0],
+        "confidence": float(top[0][1]),
+        "top_k": top,
+        "probs": {class_names[i]: float(probs[i]) for i in range(len(class_names))},
+    }
+
+
+def load_disposal_guide() -> Dict:
+    with open(config.DISPOSAL_GUIDE_PATH, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        print("Usage: python src/predict.py path/to/image.jpg")
+        sys.exit(1)
+    model, names = load_model_and_classes()
+    result = predict_image(model, names, Image.open(sys.argv[1]))
+    guide = load_disposal_guide().get(result["label"], {})
+    print(f"Prediction : {result['label']}  ({result['confidence']:.1%})")
+    for label, p in result["top_k"]:
+        print(f"  {label:<12} {p:.1%}")
+    if guide:
+        print(f"Bin        : {guide.get('bin', 'N/A')}")
+        for step in guide.get("steps", []):
+            print(f"  - {step}")

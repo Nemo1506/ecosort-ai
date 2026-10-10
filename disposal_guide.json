@@ -1,0 +1,158 @@
+{
+  "battery": {
+    "display_name": "Batteries",
+    "emoji": "🔋",
+    "bin": "Hazardous / e-waste collection point",
+    "color": "#d62828",
+    "recyclable": true,
+    "steps": [
+      "Never put batteries in regular or wet waste: they can leak toxins and start fires.",
+      "Tape the terminals of lithium and button cells before storing them.",
+      "Keep them in a dry container until you can hand them to an e-waste or battery collection point."
+    ],
+    "tip": "Many electronics shops and e-waste collectors accept used batteries."
+  },
+  "biological": {
+    "display_name": "Biological / food waste",
+    "emoji": "🍌",
+    "bin": "Wet waste / compost",
+    "color": "#2d6a4f",
+    "recyclable": true,
+    "steps": [
+      "Put food scraps, peels and garden waste in the wet-waste bin.",
+      "Drain excess liquid and keep it separate from dry recyclables.",
+      "Home composting is ideal if you have the space."
+    ],
+    "tip": "Do not mix wet waste with plastic bags unless the bag is compostable."
+  },
+  "brown-glass": {
+    "display_name": "Brown glass",
+    "emoji": "🍾",
+    "bin": "Dry recyclables (glass)",
+    "color": "#1d70b8",
+    "recyclable": true,
+    "steps": [
+      "Empty and rinse the bottle or jar.",
+      "Remove caps and lids and recycle them separately.",
+      "Keep brown glass apart from ceramics, mirrors and bulbs, which are not recyclable with bottle glass."
+    ],
+    "tip": "Handle broken glass carefully: wrap it in paper before disposal."
+  },
+  "cardboard": {
+    "display_name": "Cardboard",
+    "emoji": "📦",
+    "bin": "Dry recyclables (paper & cardboard)",
+    "color": "#1d70b8",
+    "recyclable": true,
+    "steps": [
+      "Remove tape, labels and packing material.",
+      "Flatten boxes to save space.",
+      "Keep cardboard dry; food-soiled or greasy parts cannot be recycled."
+    ],
+    "tip": "Cut greasy sections off pizza boxes and recycle only the clean part."
+  },
+  "clothes": {
+    "display_name": "Clothes / textiles",
+    "emoji": "👕",
+    "bin": "Reuse / donate, else textile recycling",
+    "color": "#e07a1f",
+    "recyclable": true,
+    "steps": [
+      "Wearable clothes: wash and donate them to a charity or clothing drive.",
+      "Worn-out textiles: give them to a textile recycler or reuse them as cleaning rags.",
+      "Heavily soiled or wet items go with general (reject) waste."
+    ],
+    "tip": "Repairing or upcycling clothes is the most eco-friendly option."
+  },
+  "green-glass": {
+    "display_name": "Green glass",
+    "emoji": "🍾",
+    "bin": "Dry recyclables (glass)",
+    "color": "#1d70b8",
+    "recyclable": true,
+    "steps": [
+      "Empty and rinse the bottle or jar.",
+      "Remove caps and lids and recycle them separately.",
+      "Keep green glass apart from ceramics, mirrors and bulbs, which are not recyclable with bottle glass."
+    ],
+    "tip": "Handle broken glass carefully: wrap it in paper before disposal."
+  },
+  "metal": {
+    "display_name": "Metal",
+    "emoji": "🥫",
+    "bin": "Dry recyclables (metal)",
+    "color": "#1d70b8",
+    "recyclable": true,
+    "steps": [
+      "Empty and rinse cans and tins.",
+      "Crush them if possible to save space.",
+      "Only put aerosol cans in the bin when they are completely empty."
+    ],
+    "tip": "Larger scrap metal can be sold to a scrap dealer."
+  },
+  "paper": {
+    "display_name": "Paper",
+    "emoji": "📄",
+    "bin": "Dry recyclables (paper & cardboard)",
+    "color": "#1d70b8",
+    "recyclable": true,
+    "steps": [
+      "Keep paper clean and dry.",
+      "Remove plastic covers, spiral bindings and metal clips where possible.",
+      "Used tissues, greasy paper and waxed paper are not recyclable."
+    ],
+    "tip": "Shredded paper is better bagged separately so it does not scatter."
+  },
+  "plastic": {
+    "display_name": "Plastic",
+    "emoji": "🧴",
+    "bin": "Dry recyclables (plastic)",
+    "color": "#1d70b8",
+    "recyclable": true,
+    "steps": [
+      "Empty, rinse and dry bottles and containers.",
+      "Check the recycling number on the item; local acceptance varies.",
+      "Thin films and wrappers are often not accepted, so check local rules."
+    ],
+    "tip": "Reducing single-use plastic matters more than recycling it."
+  },
+  "shoes": {
+    "display_name": "Shoes",
+    "emoji": "👟",
+    "bin": "Reuse / donate, else dry reject waste",
+    "color": "#e07a1f",
+    "recyclable": false,
+    "steps": [
+      "Wearable shoes: clean them and donate them in pairs.",
+      "Repair worn shoes at a cobbler when possible.",
+      "Beyond repair: dispose of them as dry reject waste or at a shoe-recycling drop-off if one exists near you."
+    ],
+    "tip": "Tie pairs together so they stay matched when donated."
+  },
+  "trash": {
+    "display_name": "General trash",
+    "emoji": "🗑️",
+    "bin": "General / reject waste",
+    "color": "#6c757d",
+    "recyclable": false,
+    "steps": [
+      "Place non-recyclable items in the general waste bin.",
+      "Double-check whether part of the item is recyclable before throwing it away.",
+      "Never dispose of hazardous items such as batteries, bulbs or chemicals here."
+    ],
+    "tip": "If unsure, check your local municipality's segregation guidelines."
+  },
+  "white-glass": {
+    "display_name": "White / clear glass",
+    "emoji": "🍶",
+    "bin": "Dry recyclables (glass)",
+    "color": "#1d70b8",
+    "recyclable": true,
+    "steps": [
+      "Empty and rinse the bottle or jar.",
+      "Remove caps and lids and recycle them separately.",
+      "Keep clear glass apart from ceramics, mirrors and bulbs, which are not recyclable with bottle glass."
+    ],
+    "tip": "Handle broken glass carefully: wrap it in paper before disposal."
+  }
+}
