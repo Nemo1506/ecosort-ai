@@ -98,33 +98,61 @@ def split_dataset(force: bool = False) -> None:
 
 # ---------------------------------------------------------------- loaders
 def get_datasets(batch_size: int = None):
-    """Return (train_ds, val_ds, test_ds) as batched tf.data datasets.
+    """Return (train_loader, val_loader, test_loader) as PyTorch DataLoaders."""
+    return get_torch_dataloaders(batch_size=batch_size)
 
-    Images are resized to config.IMG_SIZE and stay in the 0-255 range; the model
-    itself rescales them. Labels are integers indexed by config.CLASS_NAMES.
-    """
-    import tensorflow as tf
+
+def get_torch_dataloaders(batch_size: int = None, num_workers: int = 0):
+    """Return (train_loader, val_loader, test_loader) as PyTorch DataLoader instances."""
+    import torch
+    from torch.utils.data import DataLoader, Dataset
+    from torchvision import transforms
 
     batch_size = batch_size or config.BATCH_SIZE
 
-    def load(directory, shuffle):
-        ds = tf.keras.utils.image_dataset_from_directory(
-            directory,
-            labels="inferred",
-            label_mode="int",
-            class_names=config.CLASS_NAMES,
-            color_mode="rgb",
-            batch_size=batch_size,
-            image_size=config.IMG_SIZE,
-            shuffle=shuffle,
-            seed=config.SEED,
-        )
-        return ds.prefetch(tf.data.AUTOTUNE)
+    transform = transforms.Compose([
+        transforms.Resize(config.IMG_SIZE),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    ])
 
-    train_ds = load(config.TRAIN_DIR, shuffle=True)
-    val_ds = load(config.VAL_DIR, shuffle=False)
-    test_ds = load(config.TEST_DIR, shuffle=False)
-    return train_ds, val_ds, test_ds
+    class PyTorchGarbageDataset(Dataset):
+        def __init__(self, root_dir: Path, transform=None):
+            self.samples = []
+            self.transform = transform
+            for idx, cls in enumerate(config.CLASS_NAMES):
+                cls_dir = root_dir / cls
+                if not cls_dir.is_dir():
+                    continue
+                for p in cls_dir.iterdir():
+                    if p.is_file() and p.suffix.lower() in config.IMAGE_EXTENSIONS:
+                        self.samples.append((p, idx))
+
+        def __len__(self):
+            return len(self.samples)
+
+        def __getitem__(self, idx):
+            path, target = self.samples[idx]
+            try:
+                with Image.open(path) as img:
+                    img = img.convert("RGB")
+                    if self.transform:
+                        img = self.transform(img)
+                    return img, target
+            except Exception:
+                dummy = torch.zeros(3, config.IMG_SIZE[0], config.IMG_SIZE[1])
+                return dummy, target
+
+    train_ds = PyTorchGarbageDataset(config.TRAIN_DIR, transform=transform)
+    val_ds = PyTorchGarbageDataset(config.VAL_DIR, transform=transform)
+    test_ds = PyTorchGarbageDataset(config.TEST_DIR, transform=transform)
+
+    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=num_workers)
+    val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+    test_loader = DataLoader(test_ds, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+
+    return train_loader, val_loader, test_loader
+
 
 
 def compute_class_weights() -> dict:

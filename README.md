@@ -2,11 +2,13 @@
 
 [![Creator](https://img.shields.io/badge/Author-Nemaan%20(Shaikh%20Nemaan)-10B981?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Nemo1506)
 [![GitHub Profile](https://img.shields.io/badge/GitHub-Nemo1506-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Nemo1506)
-[![Python](https://img.shields.io/badge/Python-3.13-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
+[![CI Pipeline](https://img.shields.io/badge/CI-GitHub%20Actions-2088FF?style=for-the-badge&logo=githubactions&logoColor=white)](https://github.com/Nemo1506/ecosort-ai/actions)
+[![Python](https://img.shields.io/badge/Python-3.11%20%7C%203.12%20%7C%203.13-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.14-EE4C2C?style=for-the-badge&logo=pytorch&logoColor=white)](https://pytorch.org)
+[![ONNX Runtime](https://img.shields.io/badge/ONNX%20Runtime-1.31-005CED?style=for-the-badge&logo=onnx&logoColor=white)](https://onnxruntime.ai)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.65-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)](https://streamlit.io)
-[![Architecture](https://img.shields.io/badge/Architecture-MobileNetV2-34D399?style=for-the-badge)](https://arxiv.org/abs/1801.04381)
-[![Explainable AI](https://img.shields.io/badge/XAI-Grad--CAM-38BDF8?style=for-the-badge)](https://arxiv.org/abs/1610.02391)
+[![Tests](https://img.shields.io/badge/Tests-18%20Passed-10B981?style=for-the-badge&logo=pytest&logoColor=white)](https://pytest.org)
+[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://docker.com)
 [![Status](https://img.shields.io/badge/Status-Production%20Ready-059669?style=for-the-badge)]()
 
 **EcoSort AI** is an enterprise-grade computer vision platform and circular economy intelligence system engineered for automated municipal and commercial waste segregation. Built and spearheaded by **[Nemaan (Shaikh Nemaan)](https://github.com/Nemo1506)**, the platform integrates **MobileNetV2 transfer learning**, **Explainable AI (Grad-CAM)**, and a **cyberpunk-emerald glassmorphic Streamlit interface** to bridge real-time neural vision with localized municipal recycling regulations across the globe.
@@ -141,11 +143,28 @@ Trained on the Kaggle [`mostafaabla/garbage-classification`](https://www.kaggle.
 
 ```
 ecosort-ai/
+├── main.py                     # Unified master CLI entrypoint (classify, app, train, eval, test)
 ├── app.py                      # Production Streamlit platform (6 revolutionary tabs)
 ├── config.py                   # Central paths, 12 classes & transfer learning hyperparams
 ├── disposal_guide.json         # Base municipal segregation guide & safety rules
-├── requirements.txt            # Python dependencies (PyTorch, Torchvision, Streamlit, etc.)
+├── requirements.txt            # Python dependencies (PyTorch, ONNX, Streamlit, etc.)
+├── Dockerfile                  # Containerized production runtime
+├── .dockerignore               # Image layer optimization rules
 ├── README.md                   # Comprehensive technical documentation & credits to Nemaan
+│
+├── .github/
+│   └── workflows/
+│       └── ci.yml              # Multi-OS automated GitHub Actions CI/CD test runner
+│
+├── tests/
+│   ├── test_config.py          # Configuration and split ratio validation
+│   ├── test_predict.py         # ModelWrapper inference, batching & guide coverage
+│   ├── test_gradcam.py         # Explainable AI (Grad-CAM) thermal heatmap unit tests
+│   ├── test_municipal_rules.py # Multi-national municipal compliance tests
+│   ├── test_assistant_kb.py    # Eco-Assistant NLP knowledge base tests
+│   ├── test_material_comparison.py # Life-Cycle Assessment calculations
+│   ├── test_report_generator.py# ESG HTML audit certificate tests
+│   └── test_evaluate.py        # Top-1, Top-3, and F1 evaluation metrics validation
 │
 ├── src/
 │   ├── gradcam.py              # Explainable AI (Grad-CAM) attention heatmap generator
@@ -154,10 +173,10 @@ ecosort-ai/
 │   ├── material_comparison.py  # Life-Cycle Assessment (LCA) data & carbon metrics
 │   ├── report_generator.py     # Printable formal HTML/PDF ESG audit certificates
 │   ├── download_dataset.py     # Ingest dataset from zip, local archive, or Kaggle
-│   ├── prepare_data.py         # Deterministic 70/15/15 stratified dataset partitioner
-│   ├── train.py                # MobileNetV2 transfer learning (PyTorch & ONNX)
-│   ├── evaluate.py             # Test benchmark metrics & confusion matrix evaluator
-│   └── predict.py              # Multi-backend model inference engine
+│   ├── prepare_data.py         # Deterministic 70/15/15 stratified dataset partitioner & PyTorch DataLoaders
+│   ├── train.py                # MobileNetV2 transfer learning (Phase 1 & Phase 2 Fine-Tuning + ONNX)
+│   ├── evaluate.py             # Test benchmark metrics & confusion matrix evaluator (Batched inference)
+│   └── predict.py              # Unified multi-backend inference engine (ONNX Runtime & PyTorch)
 │
 ├── data/
 │   ├── raw/                    # 15,515 raw images categorized across 12 class folders
@@ -242,24 +261,71 @@ Open your browser to:
 
 ---
 
-## 🧪 Terminal Model Inference
+## 🧪 Unified Command-Line Interface (main.py)
 
-Test single image classification directly from the command line:
+The platform provides a single master CLI for all core tasks:
 
 ```bash
-python src/predict.py data/processed/test/battery/battery104.jpg
+# 1. Launch the interactive web platform:
+python main.py app
+
+# 2. Classify an individual item photo:
+python main.py classify data/processed/test/battery/battery104.jpg
+
+# 3. Run high-throughput batched test evaluation (2,325 images):
+python main.py evaluate
+
+# 4. Train with Phase 2 Fine-Tuning:
+python main.py train --epochs 5 --fine-tune --fine-epochs 3
+
+# 5. Execute automated test suite (18 unit tests):
+python main.py test
 ```
 
 Example Output:
 ```text
-Prediction : battery  (98.4%)
-  battery      98.4%
-  metal        1.1%
-  trash        0.5%
-Bin        : Hazardous / e-waste collection point
+Loaded model (onnx backend)
+
+==================================================
+Prediction : BATTERY  (98.4%)
+--------------------------------------------------
+  battery        98.4%
+  metal          1.1%
+  trash          0.5%
+--------------------------------------------------
+Disposal Bin : Hazardous / e-waste collection point
+Recyclable   : Yes
+Handling Steps:
   - Never put batteries in regular or wet waste: they can leak toxins and start fires.
   - Tape the terminals of lithium and button cells before storing them.
   - Keep them in a dry container until you can hand them to an e-waste or battery collection point.
+==================================================
+```
+
+---
+
+## 🐳 Docker Container Deployment
+
+Deploy EcoSort AI anywhere using the production Dockerfile:
+
+```bash
+# Build Docker image
+docker build -t ecosort-ai .
+
+# Run container on port 8501
+docker run -d -p 8501:8501 --name ecosort-platform ecosort-ai
+```
+
+Navigate to `http://localhost:8501` to access the running container.
+
+---
+
+## 🧪 Automated Testing & Quality Assurance
+
+EcoSort AI includes an automated test suite with 100% passing unit tests covering configuration, prediction, Grad-CAM, international municipal rules, NLP knowledge retrieval, LCA calculations, and evaluation metrics:
+
+```bash
+pytest tests/ -v
 ```
 
 ---
