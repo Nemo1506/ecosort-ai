@@ -39,12 +39,25 @@ class ModelWrapper:
             import torchvision.models as models
 
             m = models.mobilenet_v2(weights=None)
-            in_features = m.classifier[1].in_features
-            m.classifier = nn.Sequential(
-                nn.Dropout(p=config.DROPOUT),
-                nn.Linear(in_features, len(self.class_names))
-            )
-            m.load_state_dict(torch.load(config.MODEL_PT_PATH, map_location="cpu"))
+            state_dict = torch.load(config.MODEL_PT_PATH, map_location="cpu")
+            num_classes = len(self.class_names)
+            if "classifier.5.weight" in state_dict:
+                hidden_dim = state_dict["classifier.1.weight"].shape[0]
+                m.classifier = nn.Sequential(
+                    nn.Dropout(p=0.2),
+                    nn.Linear(1280, hidden_dim),
+                    nn.BatchNorm1d(hidden_dim),
+                    nn.ReLU(inplace=True),
+                    nn.Dropout(p=0.2),
+                    nn.Linear(hidden_dim, num_classes),
+                )
+            else:
+                in_features = m.classifier[1].in_features
+                m.classifier = nn.Sequential(
+                    nn.Dropout(p=config.DROPOUT),
+                    nn.Linear(in_features, num_classes),
+                )
+            m.load_state_dict(state_dict)
             m.eval()
             self._torch_model = m
             return self._torch_model
@@ -139,12 +152,24 @@ def load_model_and_classes(force_backend: Optional[str] = None) -> Tuple[ModelWr
             import torchvision.models as models
 
             model = models.mobilenet_v2(weights=None)
-            in_features = model.classifier[1].in_features
-            model.classifier = nn.Sequential(
-                nn.Dropout(p=config.DROPOUT),
-                nn.Linear(in_features, len(class_names))
-            )
-            model.load_state_dict(torch.load(config.MODEL_PT_PATH, map_location="cpu"))
+            state_dict = torch.load(config.MODEL_PT_PATH, map_location="cpu")
+            if "classifier.5.weight" in state_dict:
+                hidden_dim = state_dict["classifier.1.weight"].shape[0]
+                model.classifier = nn.Sequential(
+                    nn.Dropout(p=0.2),
+                    nn.Linear(1280, hidden_dim),
+                    nn.BatchNorm1d(hidden_dim),
+                    nn.ReLU(inplace=True),
+                    nn.Dropout(p=0.2),
+                    nn.Linear(hidden_dim, len(class_names)),
+                )
+            else:
+                in_features = model.classifier[1].in_features
+                model.classifier = nn.Sequential(
+                    nn.Dropout(p=config.DROPOUT),
+                    nn.Linear(in_features, len(class_names))
+                )
+            model.load_state_dict(state_dict)
             model.eval()
             return ModelWrapper(model, "torch", class_names), class_names
         except Exception as exc:

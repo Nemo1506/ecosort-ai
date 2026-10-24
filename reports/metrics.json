@@ -1,11 +1,11 @@
 {
   "test_samples": 2325,
-  "accuracy": 0.6404301075268817,
-  "top3_accuracy": 0.8619354838709677,
-  "precision_macro": 0.6042926057532881,
-  "recall_macro": 0.6625100366291254,
-  "f1_macro": 0.601936219410886,
-  "precision_weighted": 0.7437417429189102,
-  "recall_weighted": 0.6404301075268817,
-  "f1_weighted": 0.657040603754274
+  "accuracy": 0.9673118279569892,
+  "top3_accuracy": 0.9965591397849463,
+  "precision_macro": 0.9580555924107452,
+  "recall_macro": 0.9598077112350785,
+  "f1_macro": 0.9585730228372086,
+  "precision_weighted": 0.967846686504329,
+  "recall_weighted": 0.9673118279569892,
+  "f1_weighted": 0.9672908266716581
 }

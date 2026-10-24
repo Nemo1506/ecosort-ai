@@ -139,7 +139,13 @@ def train_pytorch(epochs: int = 5, fine_tune: bool = False, fine_epochs: int = 3
     print(f"Dataset loaded: {len(train_ds)} training images, {len(val_ds)} validation images")
 
     batch_size = 64
-    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=0)
+    # Balanced class sampler to equalize class exposure during training
+    targets = [target for _, target in train_ds.samples]
+    class_counts = np.bincount(targets, minlength=config.NUM_CLASSES)
+    class_weights = 1.0 / np.maximum(class_counts, 1)
+    sample_weights = torch.tensor([class_weights[t] for t in targets], dtype=torch.float32)
+    sampler = torch.utils.data.WeightedRandomSampler(sample_weights, num_samples=len(sample_weights), replacement=True)
+    train_loader = DataLoader(train_ds, batch_size=batch_size, sampler=sampler, num_workers=0)
     val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False, num_workers=0)
 
     # Build MobileNetV2 with ImageNet pre-trained weights
@@ -150,18 +156,21 @@ def train_pytorch(epochs: int = 5, fine_tune: bool = False, fine_epochs: int = 3
     for param in model.features.parameters():
         param.requires_grad = False
 
-    # Classification Head with Dropout and Linear Layer
+    # High-Performance Classifier Head with Dropout, Linear, BatchNorm and Non-Linearity
     in_features = model.classifier[1].in_features
     model.classifier = nn.Sequential(
         nn.Dropout(p=config.DROPOUT),
-        nn.Linear(in_features, config.NUM_CLASSES)
+        nn.Linear(in_features, 512),
+        nn.BatchNorm1d(512),
+        nn.ReLU(inplace=True),
+        nn.Dropout(p=config.DROPOUT),
+        nn.Linear(512, config.NUM_CLASSES)
     )
     model.to(device)
 
-    # Label-smoothing regularized cross-entropy loss
+    # Label-smoothing regularized cross-entropy loss (batches balanced via sampler)
     criterion = nn.CrossEntropyLoss(
-        weight=compute_class_weights_torch(device),
-        label_smoothing=getattr(config, "LABEL_SMOOTHING", 0.08),
+        label_smoothing=getattr(config, "LABEL_SMOOTHING", 0.05),
     )
 
     optimizer = optim.AdamW(
