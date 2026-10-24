@@ -16,11 +16,16 @@ data/raw/*
 data/processed/*
 !data/processed/.gitkeep
 
-# Keep trained weights and class mapping
+# Ignore nested desktop duplicate archive folder if present
+ecosort-ai/
+
+# Keep trained weights, ONNX model, and class mapping
 !models/ecosort_mobilenetv2.pt
+!models/ecosort_mobilenetv2.onnx
 !models/class_names.json
 !models/.gitkeep
 
 # Keep verified benchmark reports and curves
 !reports/*
 !reports/.gitkeep
+

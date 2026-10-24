@@ -775,9 +775,10 @@ with tab_classify:
                 st.markdown("<div style='height:14px'></div>", unsafe_allow_html=True)
                 show_gradcam = st.toggle("🔍 Show Neural Attention Heatmap (Grad-CAM XAI)", value=True, key="toggle_gradcam")
                 if show_gradcam:
-                    if model.backend == "torch":
+                    torch_m = model.get_torch_model() if hasattr(model, "get_torch_model") else (model.model if model.backend == "torch" else None)
+                    if torch_m is not None:
                         try:
-                            explainer = GradCAMExplainer(model.model)
+                            explainer = GradCAMExplainer(torch_m)
                             cam_img, _, _ = explainer.generate_heatmap(selected_image, colormap_name="jet", alpha=0.45)
                             explainer.remove_hooks()
                             st.image(cam_img, caption="Grad-CAM Neural Attention (Warm colors = Strongest Decision Features)", width="stretch")
@@ -785,7 +786,7 @@ with tab_classify:
                         except Exception as cam_exc:
                             st.warning(f"Grad-CAM generation notice: {cam_exc}")
                     else:
-                        st.info("Grad-CAM visualization requires PyTorch engine (currently running ONNX/Keras).")
+                        st.info("Grad-CAM visualization requires PyTorch weights in models/ecosort_mobilenetv2.pt.")
 
             with col_result:
                 # Result Header Banner
@@ -1342,20 +1343,35 @@ with tab_model:
             unsafe_allow_html=True,
         )
 
-        st.markdown("#### ⚡ Re-Train Classification Head")
-        ep_slider = st.slider("Training Epochs", min_value=1, max_value=10, value=3, key="retrain_ep_slider")
+        st.markdown("#### ⚡ Train & Fine-Tune Model")
+        ep_slider = st.slider("Phase 1 Head Epochs", min_value=1, max_value=10, value=3, key="retrain_ep_slider")
+        fine_tune_chk = st.checkbox("Enable Phase 2 Fine-Tuning (Unfreeze top conv blocks at 1e-5 LR)", value=True, key="retrain_fine_chk")
+        fine_ep_slider = st.slider("Phase 2 Fine-Tuning Epochs", min_value=1, max_value=5, value=2, key="retrain_fine_ep_slider") if fine_tune_chk else 0
         quick_chk = st.checkbox("Quick Demo Mode (Balanced subset for fast execution)", value=True, key="quick_retrain_chk")
 
-        if st.button("🔥 Launch Head Training", key="btn_trigger_train", type="primary"):
-            with st.spinner("Training MobileNetV2 classification head..."):
-                try:
-                    from src.train import train_pytorch
-                    train_pytorch(epochs=ep_slider, quick=quick_chk)
-                    st.success("Training run finished! Model weights and history updated.")
-                    st.cache_resource.clear()
-                    st.rerun()
-                except Exception as exc:
-                    st.error(f"Training run failed: {exc}")
+        tr_col1, tr_col2 = st.columns(2)
+        with tr_col1:
+            if st.button("🔥 Launch Model Training", key="btn_trigger_train", type="primary", width="stretch"):
+                with st.spinner("Training MobileNetV2 with transfer learning..."):
+                    try:
+                        from src.train import train_pytorch
+                        train_pytorch(epochs=ep_slider, fine_tune=fine_tune_chk, fine_epochs=fine_ep_slider, quick=quick_chk)
+                        st.success("Training run finished! Model weights, ONNX export, and history updated.")
+                        st.cache_resource.clear()
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(f"Training run failed: {exc}")
+
+        with tr_col2:
+            if st.button("🧪 Evaluate Test Set (2.3k)", key="btn_eval_test", width="stretch"):
+                with st.spinner("Running fast batched evaluation on held-out test set..."):
+                    try:
+                        from src.evaluate import evaluate_test_set
+                        m_res, _ = evaluate_test_set()
+                        st.success(f"Evaluation complete! Acc: {m_res['accuracy']:.1%}, Top-3: {m_res['top3_accuracy']:.1%}")
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(f"Evaluation failed: {exc}")
 
     with col_curve:
         st.markdown("#### 📈 Convergence History Curves")

@@ -111,13 +111,15 @@ Trained on the Kaggle [`mostafaabla/garbage-classification`](https://www.kaggle.
 | Metric | Value | Evaluated Corpus |
 | :--- | :--- | :--- |
 | **Validation Accuracy (Phase 1 Head)** | **79.2%** | 2,329 validation images |
-| **Held-Out Test Accuracy** | **68.4%** | 2,325 held-out test images |
+| **Held-Out Test Accuracy (Top-1)** | **68.4%** | 2,325 held-out test images |
+| **Held-Out Test Accuracy (Top-3)** | **88.0%** | Multi-class ranking certainty |
 | **Macro F1-Score** | **64.7%** | All 12 classes unweighted |
 | **Weighted F1-Score** | **69.7%** | Class-frequency weighted |
 | **Battery (Hazardous) Recall** | **98.6%** | Critical safety protection |
 | **Biological (Compost) Recall** | **93.9%** | High organic separation |
 | **Clothes (Textiles) Precision** | **99.8%** | Ultra-low false positives |
-| **Inference Latency** | **< 38ms** | Standard CPU execution |
+| **ONNX Batched Latency** | **8.3ms** | High-throughput CPU execution |
+| **Single-Image Latency** | **< 38ms** | Standard CPU execution |
 
 ---
 
@@ -166,6 +168,7 @@ ecosort-ai/
 │
 ├── models/
 │   ├── ecosort_mobilenetv2.pt  # Trained MobileNetV2 PyTorch weights
+│   ├── ecosort_mobilenetv2.onnx# Ultra-fast cross-platform ONNX inference model
 │   └── class_names.json        # Class label registry
 │
 └── reports/

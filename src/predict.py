@@ -1,4 +1,4 @@
-"""Step 5 - Load the saved model and classify a single image.
+"""Step 5 - Load the saved model and classify single or batch images.
 
 Supports ONNX Runtime, PyTorch, and TensorFlow backends.
 Used by the Streamlit app and command line:
@@ -7,7 +7,7 @@ Used by the Streamlit app and command line:
 import json
 import sys
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -18,39 +18,60 @@ import config
 
 
 class ModelWrapper:
+    """Unified inference wrapper across ONNX Runtime, PyTorch, and Keras backends."""
+
     def __init__(self, model_obj, backend: str, class_names: list):
         self.model = model_obj
         self.backend = backend
         self.class_names = class_names
+        self._torch_model = None
 
-    def predict_probs(self, image: Image.Image) -> np.ndarray:
+    def get_torch_model(self):
+        """Retrieve or lazy-load the PyTorch model (required for Grad-CAM explainability)."""
+        if self.backend == "torch":
+            return self.model
+        if self._torch_model is not None:
+            return self._torch_model
+
+        if config.MODEL_PT_PATH.exists():
+            import torch
+            import torch.nn as nn
+            import torchvision.models as models
+
+            m = models.mobilenet_v2(weights=None)
+            in_features = m.classifier[1].in_features
+            m.classifier = nn.Sequential(
+                nn.Dropout(p=config.DROPOUT),
+                nn.Linear(in_features, len(self.class_names))
+            )
+            m.load_state_dict(torch.load(config.MODEL_PT_PATH, map_location="cpu"))
+            m.eval()
+            self._torch_model = m
+            return self._torch_model
+        return None
+
+    def _preprocess_image(self, image: Image.Image) -> np.ndarray:
         image = ImageOps.exif_transpose(image).convert("RGB")
         resample = getattr(Image, "Resampling", Image).BILINEAR
         resized = image.resize((config.IMG_SIZE[1], config.IMG_SIZE[0]), resample)
-        arr = np.asarray(resized, dtype=np.float32)
+        arr = np.asarray(resized, dtype=np.float32) / 255.0
+        mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
+        std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+        norm = (arr - mean) / std
+        return np.transpose(norm, (2, 0, 1))  # (3, 224, 224)
 
+    def predict_probs(self, image: Image.Image) -> np.ndarray:
+        """Compute class probabilities for a single PIL image."""
         if self.backend == "onnx":
-            # ONNX model expects shape (1, 3, 224, 224) normalized with ImageNet mean/std
-            arr = arr / 255.0
-            mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
-            std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
-            arr = (arr - mean) / std
-            arr = np.transpose(arr, (2, 0, 1))  # (3, 224, 224)
-            inp = np.expand_dims(arr, axis=0)  # (1, 3, 224, 224)
+            inp = np.expand_dims(self._preprocess_image(image), axis=0)  # (1, 3, 224, 224)
             input_name = self.model.get_inputs()[0].name
             outputs = self.model.run(None, {input_name: inp})[0][0]
-            # Softmax
             exp_logits = np.exp(outputs - np.max(outputs))
             return exp_logits / exp_logits.sum()
 
         elif self.backend == "torch":
             import torch
-            arr = arr / 255.0
-            mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
-            std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
-            arr = (arr - mean) / std
-            arr = np.transpose(arr, (2, 0, 1))
-            inp = torch.tensor(np.expand_dims(arr, axis=0), dtype=torch.float32)
+            inp = torch.tensor(np.expand_dims(self._preprocess_image(image), axis=0), dtype=torch.float32)
             self.model.eval()
             with torch.no_grad():
                 logits = self.model(inp).numpy()[0]
@@ -58,14 +79,42 @@ class ModelWrapper:
             return exp_logits / exp_logits.sum()
 
         elif self.backend == "keras":
-            inp = np.expand_dims(arr, axis=0)  # Keras handles rescaling internally
+            image = ImageOps.exif_transpose(image).convert("RGB")
+            resized = image.resize((config.IMG_SIZE[1], config.IMG_SIZE[0]))
+            arr = np.asarray(resized, dtype=np.float32)
+            inp = np.expand_dims(arr, axis=0)
             probs = self.model.predict(inp, verbose=0)[0]
             return probs
 
         raise ValueError(f"Unknown backend: {self.backend}")
 
+    def predict_batch(self, images: List[Image.Image]) -> np.ndarray:
+        """Compute class probabilities for a list of PIL images with batching."""
+        if not images:
+            return np.empty((0, len(self.class_names)), dtype=np.float32)
 
-def load_model_and_classes() -> Tuple[ModelWrapper, List[str]]:
+        if self.backend == "onnx":
+            batch_arr = np.stack([self._preprocess_image(img) for img in images], axis=0)
+            input_name = self.model.get_inputs()[0].name
+            outputs = self.model.run(None, {input_name: batch_arr})[0]
+            exp_logits = np.exp(outputs - np.max(outputs, axis=1, keepdims=True))
+            return exp_logits / exp_logits.sum(axis=1, keepdims=True)
+
+        elif self.backend == "torch":
+            import torch
+            batch_arr = np.stack([self._preprocess_image(img) for img in images], axis=0)
+            inp = torch.tensor(batch_arr, dtype=torch.float32)
+            self.model.eval()
+            with torch.no_grad():
+                logits = self.model(inp).numpy()
+            exp_logits = np.exp(logits - np.max(logits, axis=1, keepdims=True))
+            return exp_logits / exp_logits.sum(axis=1, keepdims=True)
+
+        else:
+            return np.array([self.predict_probs(img) for img in images])
+
+
+def load_model_and_classes(force_backend: Optional[str] = None) -> Tuple[ModelWrapper, List[str]]:
     """Return (model_wrapper, class_names). Raises FileNotFoundError if not trained yet."""
     if config.CLASS_NAMES_PATH.exists():
         with open(config.CLASS_NAMES_PATH, "r", encoding="utf-8") as f:
@@ -73,8 +122,8 @@ def load_model_and_classes() -> Tuple[ModelWrapper, List[str]]:
     else:
         class_names = list(config.CLASS_NAMES)
 
-    # 1. Check ONNX model (highest speed & cross-platform)
-    if config.MODEL_ONNX_PATH.exists():
+    # 1. Check ONNX model (highest execution speed & cross-platform)
+    if (force_backend is None or force_backend == "onnx") and config.MODEL_ONNX_PATH.exists():
         try:
             import onnxruntime as ort
             session = ort.InferenceSession(str(config.MODEL_ONNX_PATH), providers=["CPUExecutionProvider"])
@@ -83,7 +132,7 @@ def load_model_and_classes() -> Tuple[ModelWrapper, List[str]]:
             print(f"Warning: Failed to load ONNX model ({exc}), checking other formats...")
 
     # 2. Check PyTorch model
-    if config.MODEL_PT_PATH.exists():
+    if (force_backend is None or force_backend == "torch") and config.MODEL_PT_PATH.exists():
         try:
             import torch
             import torch.nn as nn
@@ -102,7 +151,7 @@ def load_model_and_classes() -> Tuple[ModelWrapper, List[str]]:
             print(f"Warning: Failed to load PyTorch model ({exc}), checking other formats...")
 
     # 3. Check Keras model
-    if config.MODEL_PATH.exists():
+    if (force_backend is None or force_backend == "keras") and config.MODEL_PATH.exists():
         try:
             from tensorflow import keras
             model = keras.models.load_model(config.MODEL_PATH)

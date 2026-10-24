@@ -61,6 +61,9 @@ LR_HEAD = 1e-3
 LR_FINE = 1e-5
 FINE_TUNE_LAYERS = 40          # how many top layers of MobileNetV2 to unfreeze
 DROPOUT = 0.3
+LABEL_SMOOTHING = 0.08         # regularize cross-entropy to prevent overconfidence
+WEIGHT_DECAY = 1e-4            # AdamW L2 penalty
+
 
 # ----------------------------------------------------------------- app
 LOW_CONFIDENCE = 0.60          # below this the app warns the user
