@@ -409,12 +409,12 @@ st.markdown(
                 CIRCULAR AI OPERATIONAL &bull; BACKEND: {active_backend}
             </div>
             <div class="hero-badge" style="background:rgba(56,189,248,0.18); border-color:rgba(56,189,248,0.45); color:#7dd3fc;">
-                👨‍💻 LEAD ARCHITECT: NEMAAN
+                👤 OPERATOR: ACTIVE USER
             </div>
         </div>
         <div class="hero-title">EcoSort AI ♻️</div>
         <div class="hero-subtitle">
-            Autonomous computer vision and circular material intelligence platform engineered by <b>Nemaan (Shaikh Nemaan)</b>.
+            Autonomous computer vision and circular material intelligence platform for automated waste segregation.
             Trained on 15,500+ verified multi-class images with MobileNetV2 transfer learning,
             Explainable AI (Grad-CAM), real-time global municipal protocols, and ESG telemetry.
         </div>
@@ -435,13 +435,16 @@ st.markdown(
 # SIDEBAR CONTROL CONSOLE & GLOBAL MUNICIPAL SELECTOR
 # -----------------------------------------------------------------------------
 with st.sidebar:
-    st.markdown("### 👨‍💻 Creator & Architect")
+    st.markdown("### 👤 User Workstation")
     st.markdown(
         """
-        <div style="background:rgba(16,185,129,0.12); border:1px solid rgba(16,185,129,0.35); border-radius:12px; padding:12px 14px; margin-bottom:16px;">
-            <div style="font-weight:800; font-size:1.05rem; color:#34d399;">Nemaan</div>
-            <div style="font-size:0.8rem; color:#94a3b8; font-family:'JetBrains Mono'; margin-top:2px;">Lead AI & Platform Engineer</div>
-            <div style="font-size:0.78rem; color:#cbd5e1; margin-top:6px;">📧 shaikh.nemaan1510@gmail.com</div>
+        <div style="background:rgba(56,189,248,0.1); border:1px solid rgba(56,189,248,0.3); border-radius:12px; padding:12px 14px; margin-bottom:16px;">
+            <div style="display:flex; align-items:center; justify-content:space-between;">
+                <div style="font-weight:800; font-size:1.02rem; color:#38bdf8;">👤 Operator Console</div>
+                <span class="live-dot" style="background:#38bdf8; box-shadow:0 0 8px #38bdf8;"></span>
+            </div>
+            <div style="font-size:0.8rem; color:#94a3b8; font-family:'JetBrains Mono'; margin-top:4px;">SESSION: ACTIVE USER</div>
+            <div style="font-size:0.76rem; color:#64748b; margin-top:2px;">ROLE: System Administrator</div>
         </div>
         """,
         unsafe_allow_html=True,
