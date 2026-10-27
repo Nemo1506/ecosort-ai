@@ -1,12 +1,13 @@
 """Tests for src/predict.py inference, model wrappers, and probability outputs."""
 import numpy as np
 from PIL import Image
+
 import config
 from src.predict import (
+    ModelWrapper,
     load_disposal_guide,
     load_model_and_classes,
     predict_image,
-    ModelWrapper,
 )
 
 

@@ -16,6 +16,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
@@ -44,8 +45,8 @@ def export_model_to_onnx(model, device):
     """Export PyTorch MobileNetV2 model to ONNX format with verification."""
     print("\nExporting model to ONNX format...")
     try:
-        import torch
         import onnx
+        import torch
         model.eval()
         dummy_input = torch.randn(1, 3, config.IMG_SIZE[0], config.IMG_SIZE[1], device=device)
         torch.onnx.export(
@@ -75,9 +76,9 @@ def train_pytorch(epochs: int = 5, fine_tune: bool = False, fine_epochs: int = 3
     import torch
     import torch.nn as nn
     import torch.optim as optim
-    from torch.utils.data import DataLoader, Dataset
-    from PIL import Image
     import torchvision.models as models
+    from PIL import Image
+    from torch.utils.data import DataLoader, Dataset
     from torchvision import transforms
 
     config.ensure_dirs()

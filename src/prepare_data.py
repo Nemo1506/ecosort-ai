@@ -13,8 +13,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from PIL import Image  # noqa: E402
 import random  # noqa: E402
+
+from PIL import Image  # noqa: E402
 
 import config  # noqa: E402
 

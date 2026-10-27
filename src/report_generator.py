@@ -2,8 +2,8 @@
 
 Self-contained with embedded styling, print media rules, and official seal.
 """
-import time
 import hashlib
+import time
 
 
 def generate_html_audit_certificate(

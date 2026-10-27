@@ -21,6 +21,7 @@ sys.path.insert(0, str(BASE_DIR))
 def cmd_classify(args):
     """Run model inference on single image."""
     from PIL import Image
+
     from src.predict import load_disposal_guide, load_model_and_classes, predict_image
 
     img_path = Path(args.image_path)

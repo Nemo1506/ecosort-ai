@@ -1,8 +1,9 @@
 """Tests for src/gradcam.py Explainable AI attention heatmap generation."""
 import numpy as np
 from PIL import Image
-from src.predict import load_model_and_classes
+
 from src.gradcam import GradCAMExplainer
+from src.predict import load_model_and_classes
 
 
 def test_gradcam_heatmap_generation():

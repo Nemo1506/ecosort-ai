@@ -8,7 +8,7 @@ guidelines for the 12 material categories across 5 major global jurisdictions:
 - Japan (Strict Multi-Stream Resource Segregation)
 - India (Swachh Bharat Urban Solid Waste Rules)
 """
-from typing import Dict, Any
+from typing import Any, Dict
 
 MUNICIPAL_JURISDICTIONS: Dict[str, Dict[str, Any]] = {
     "🇺🇸 United States (Single-Stream Standard)": {

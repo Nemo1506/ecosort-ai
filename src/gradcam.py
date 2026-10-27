@@ -5,13 +5,14 @@ highlighting the spatial regions of an image that contributed most
 to the classification decision.
 """
 from typing import Optional, Tuple
+
+import matplotlib.cm as cm
 import numpy as np
-from PIL import Image, ImageOps
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.transforms as transforms
-import matplotlib.cm as cm
+from PIL import Image, ImageOps
 
 import config
 

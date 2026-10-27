@@ -3,8 +3,7 @@
 Provides authoritative municipal answers for tricky, ambiguous items that
 regular vision classifiers or consumers frequently encounter.
 """
-from typing import Dict, List, Optional, Tuple
-
+from typing import Dict, List
 
 ECO_ASSISTANT_FAQ = [
     {

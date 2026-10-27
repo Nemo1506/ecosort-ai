@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Dict, Optional, Tuple
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
@@ -24,13 +25,13 @@ BASE_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(BASE_DIR))
 
 import config
+from src.assistant_kb import search_assistant_faq
 from src.download_dataset import detect_local_zip, extract_dataset_zip
+from src.gradcam import GradCAMExplainer
+from src.material_comparison import MATERIAL_LCA_DATA
+from src.municipal_rules import MUNICIPAL_JURISDICTIONS, get_jurisdiction_info
 from src.predict import load_disposal_guide, load_model_and_classes, predict_image
 from src.prepare_data import split_dataset
-from src.gradcam import GradCAMExplainer
-from src.municipal_rules import MUNICIPAL_JURISDICTIONS, get_jurisdiction_info
-from src.assistant_kb import search_assistant_faq
-from src.material_comparison import MATERIAL_LCA_DATA
 from src.report_generator import generate_html_audit_certificate
 
 # -----------------------------------------------------------------------------

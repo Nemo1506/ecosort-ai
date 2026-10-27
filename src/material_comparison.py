@@ -7,7 +7,7 @@ Provides verified cradle-to-grave ecological benchmarks across all 12 material c
 - Circular recycling fidelity (loss of material quality across cycles)
 - Environmental toxicity hazard score (1-10)
 """
-from typing import Dict, Any
+from typing import Any, Dict
 
 MATERIAL_LCA_DATA: Dict[str, Dict[str, Any]] = {
     "battery": {

@@ -1,7 +1,8 @@
 """Tests for train.py dataset validation and class weighting."""
 from unittest.mock import patch
+
 import pytest
-from pathlib import Path
+
 import config
 from src.train import compute_class_weights_torch
 

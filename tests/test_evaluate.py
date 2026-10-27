@@ -1,5 +1,6 @@
 """Tests for src/evaluate.py metrics and evaluation calculations."""
 import numpy as np
+
 import config
 from src.evaluate import compute_metrics
 
