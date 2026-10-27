@@ -7,7 +7,7 @@ def test_jurisdictions_presence():
     expected_regions = ["United States", "European Union", "United Kingdom", "Japan", "India"]
     assert len(MUNICIPAL_JURISDICTIONS) >= 5
     for r in expected_regions:
-        assert any(r in k for k in MUNICIPAL_JURISDICTIONS.keys()), f"Missing region: {r}"
+        assert any(r in k for k in MUNICIPAL_JURISDICTIONS), f"Missing region: {r}"
 
 
 def test_jurisdiction_info_mapping():

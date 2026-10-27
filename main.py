@@ -18,9 +18,6 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(BASE_DIR))
 
-import config
-
-
 def cmd_classify(args):
     """Run model inference on single image."""
     from PIL import Image
@@ -36,19 +33,19 @@ def cmd_classify(args):
     res = predict_image(model, class_names, Image.open(img_path), top_k=args.top_k)
     guide = load_disposal_guide().get(res["label"], {})
 
-    print(f"\n==================================================")
+    print("\n==================================================")
     print(f"Prediction : {res['label'].upper()}  ({res['confidence']:.1%})")
-    print(f"--------------------------------------------------")
+    print("--------------------------------------------------")
     for label, p in res["top_k"]:
         print(f"  {label:<14} {p:.1%}")
-    print(f"--------------------------------------------------")
+    print("--------------------------------------------------")
     if guide:
         print(f"Disposal Bin : {guide.get('bin', 'N/A')}")
         print(f"Recyclable   : {'Yes' if guide.get('recyclable', True) else 'No'}")
         print("Handling Steps:")
         for step in guide.get("steps", []):
             print(f"  - {step}")
-    print(f"==================================================\n")
+    print("==================================================\n")
 
 
 def cmd_evaluate(args):
@@ -71,7 +68,7 @@ def cmd_train(args):
 def cmd_prepare(args):
     """Split dataset into stratified train, val, and test subsets."""
     from src.prepare_data import split_dataset
-    split_dataset(force=args.force)
+    split_dataset(force=args.force, split_ratios=tuple(args.split) if args.split else None)
 
 
 def cmd_download(args):
@@ -84,18 +81,27 @@ def cmd_app(args):
     """Launch Streamlit web platform."""
     app_path = BASE_DIR / "app.py"
     port_arg = ["--server.port", str(args.port)] if args.port else []
-    print(f"Launching EcoSort AI Streamlit Platform...")
+    print("Launching EcoSort AI Streamlit Platform...", flush=True)
     cmd = [sys.executable, "-m", "streamlit", "run", str(app_path)] + port_arg
     subprocess.run(cmd)
 
 
 def cmd_test(args):
     """Execute pytest test suite."""
-    print("Running EcoSort AI automated test suite...")
+    print("Running EcoSort AI automated test suite...", flush=True)
     cmd = [sys.executable, "-m", "pytest", "tests", "-v"]
     if args.coverage:
-        cmd.extend(["--cov=src", "--cov-report=term-missing"])
-    subprocess.run(cmd)
+        try:
+            import pytest_cov  # noqa: F401
+            cmd.extend(["--cov=src", "--cov-report=term-missing"])
+        except ImportError:
+            print(
+                "Notice: 'pytest-cov' is not installed. To view coverage, install it via: pip install pytest-cov",
+                flush=True,
+            )
+    result = subprocess.run(cmd)
+    if result.returncode != 0:
+        sys.exit(result.returncode)
 
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -139,6 +145,7 @@ def main():
     # 5. prepare
     p_prep = subparsers.add_parser("prepare", help="Partition data/raw into stratified splits")
     p_prep.add_argument("--force", action="store_true", help="Redo split even if data/processed exists")
+    p_prep.add_argument("--split", nargs=3, type=float, default=None, help="Train, val, test ratios (e.g. 0.70 0.15 0.15)")
     p_prep.set_defaults(func=cmd_prepare)
 
     # 6. download

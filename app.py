@@ -6,11 +6,10 @@ Global Municipal Standards, and Streamlit.
 import io
 import json
 import random
-import shutil
 import sys
 import time
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 import matplotlib
 matplotlib.use("Agg")
@@ -18,7 +17,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import streamlit as st
 import streamlit.components.v1 as components
-from PIL import Image, ImageOps
+from PIL import Image
 
 # Project root setup
 BASE_DIR = Path(__file__).resolve().parent
@@ -30,7 +29,7 @@ from src.predict import load_disposal_guide, load_model_and_classes, predict_ima
 from src.prepare_data import split_dataset
 from src.gradcam import GradCAMExplainer
 from src.municipal_rules import MUNICIPAL_JURISDICTIONS, get_jurisdiction_info
-from src.assistant_kb import ECO_ASSISTANT_FAQ, search_assistant_faq
+from src.assistant_kb import search_assistant_faq
 from src.material_comparison import MATERIAL_LCA_DATA
 from src.report_generator import generate_html_audit_certificate
 
@@ -461,7 +460,16 @@ with st.sidebar:
 
     st.markdown("---")
     st.markdown("### 🔊 Smart-Bin Kiosk Mode")
-    kiosk_audio_enabled = st.checkbox("Enable Smart-Bin Voice Audio & Chimes", value=True, key="kiosk_audio_enabled")
+    kiosk_audio_enabled = st.checkbox(
+        "Enable Smart-Bin Voice Audio & Chimes",
+        value=True,
+        key="kiosk_audio_enabled",
+        help="Controls audio announcements and kiosk chimes only. Toggling this on or off does NOT change classification results, model accuracy, or dataset metrics.",
+    )
+    if kiosk_audio_enabled:
+        st.caption("🔊 **Audio Active:** Voice guidance & chimes will play upon classification.")
+    else:
+        st.caption("🔇 **Audio Muted:** Silent visual classification. No values or data are altered.")
 
     st.markdown("---")
     st.markdown("### 🌿 Intelligence Console")
@@ -487,10 +495,31 @@ with st.sidebar:
 
     st.markdown("---")
     st.markdown("#### 📊 Corpus Stratification")
+    total_split = split_stats["train"] + split_stats["val"] + split_stats["test"]
+    if total_split > 0:
+        tr_pct_str = f"{split_stats['train'] / total_split:.0%}"
+        va_pct_str = f"{split_stats['val'] / total_split:.0%}"
+        te_pct_str = f"{split_stats['test'] / total_split:.0%}"
+    else:
+        tr_pct_str = f"{config.SPLIT[0]:.0%}"
+        va_pct_str = f"{config.SPLIT[1]:.0%}"
+        te_pct_str = f"{config.SPLIT[2]:.0%}"
+
     st.markdown(f"**Total Raw:** `{total_raw:,}`")
-    st.markdown(f"**Training Set (70%):** `{split_stats['train']:,}`")
-    st.markdown(f"**Validation Set (15%):** `{split_stats['val']:,}`")
-    st.markdown(f"**Held-out Test (15%):** `{split_stats['test']:,}`")
+    st.markdown(f"**Training Set ({tr_pct_str}):** `{split_stats['train']:,}`")
+    st.markdown(f"**Validation Set ({va_pct_str}):** `{split_stats['val']:,}`")
+    st.markdown(f"**Held-out Test ({te_pct_str}):** `{split_stats['test']:,}`")
+
+    if total_raw == 0:
+        st.info("💡 Empty corpus. Unpack dataset in Tab 4 (Dataset Hub) to populate images.")
+    elif total_split == 0:
+        st.warning("⚠️ Raw images found but unpartitioned. Execute split in Tab 4.")
+    else:
+        st.caption("✅ Dataset partitioned and ready for neural training.")
+
+    if st.button("🔄 Refresh Inventory", key="btn_refresh_sidebar", use_container_width=True):
+        st.cache_data.clear()
+        st.rerun()
 
 
 # -----------------------------------------------------------------------------
@@ -753,10 +782,12 @@ with tab_classify:
             bin_color = jur_info["bin_color"]
             jur_rule = jur_info["rules"]
 
-            # Trigger smart-bin voice audio if enabled
-            if kiosk_audio_enabled:
+            # Trigger smart-bin voice audio if enabled (de-duplicated across Streamlit widget reruns)
+            audio_key = f"{label}_{input_caption}_{selected_jurisdiction}"
+            if kiosk_audio_enabled and st.session_state.get("last_spoken_item") != audio_key:
                 speech_text = f"Item classified as {display_name}. Deposit into {bin_name}."
                 play_smart_audio(speech_text)
+                st.session_state["last_spoken_item"] = audio_key
 
             st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
             col_img, col_result = st.columns([1, 1.3], gap="large")
@@ -1204,6 +1235,16 @@ with tab_dataset:
 
     # Corpus Metrics & Partitioning
     st.markdown("#### 📊 Corpus Inventory & Distribution")
+    s_total_split = split_stats["train"] + split_stats["val"] + split_stats["test"]
+    if s_total_split > 0:
+        tr_label = f"TRAINING SPLIT ({split_stats['train'] / s_total_split:.0%})"
+        va_label = f"VALIDATION ({split_stats['val'] / s_total_split:.0%})"
+        te_label = f"HELD-OUT TEST ({split_stats['test'] / s_total_split:.0%})"
+    else:
+        tr_label = f"TRAINING SPLIT ({config.SPLIT[0]:.0%})"
+        va_label = f"VALIDATION ({config.SPLIT[1]:.0%})"
+        te_label = f"HELD-OUT TEST ({config.SPLIT[2]:.0%})"
+
     s_col1, s_col2, s_col3, s_col4 = st.columns(4)
     with s_col1:
         st.markdown(
@@ -1220,7 +1261,7 @@ with tab_dataset:
             f"""
             <div class="stat-pill">
                 <div class="stat-value">{split_stats['train']:,}</div>
-                <div class="stat-label">TRAINING SPLIT (70%)</div>
+                <div class="stat-label">{tr_label}</div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -1230,7 +1271,7 @@ with tab_dataset:
             f"""
             <div class="stat-pill">
                 <div class="stat-value">{split_stats['val']:,}</div>
-                <div class="stat-label">VALIDATION (15%)</div>
+                <div class="stat-label">{va_label}</div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -1240,7 +1281,7 @@ with tab_dataset:
             f"""
             <div class="stat-pill">
                 <div class="stat-value">{split_stats['test']:,}</div>
-                <div class="stat-label">HELD-OUT TEST (15%)</div>
+                <div class="stat-label">{te_label}</div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -1280,13 +1321,39 @@ with tab_dataset:
     st.pyplot(fig)
     plt.close(fig)
 
-    # Re-split Action Button
-    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-    if st.button("🔄 Execute Stratified Train/Val/Test Split (70/15/15)", type="primary", key="btn_split_dataset"):
-        with st.spinner("Partitioning images into stratified train, val, and test splits..."):
+    # Interactive Partition Ratio Customizer & Action Button
+    st.markdown("---")
+    st.markdown("#### 🔀 Configure & Execute Stratified Partitioning")
+    st.write(
+        "Adjust partition ratios below to customize your Training, Validation, and Held-out Test allocations. "
+        "EcoSort partitions each category proportionately to maintain balanced representation across all splits."
+    )
+
+    ratio_col1, ratio_col2, ratio_col3 = st.columns([1, 1, 1])
+    with ratio_col1:
+        train_ratio = st.slider("Training Ratio (%)", min_value=50, max_value=90, value=70, step=5, key="slider_train_ratio")
+    with ratio_col2:
+        max_val_ratio = 95 - train_ratio
+        val_ratio = st.slider("Validation Ratio (%)", min_value=5, max_value=max_val_ratio, value=min(15, max_val_ratio), step=5, key="slider_val_ratio")
+    with ratio_col3:
+        test_ratio = 100 - train_ratio - val_ratio
+        st.metric("Held-out Test Ratio", f"{test_ratio}%")
+
+    if total_raw > 0:
+        proj_train = int(round(total_raw * train_ratio / 100.0))
+        proj_val = int(round(total_raw * val_ratio / 100.0))
+        proj_test = total_raw - proj_train - proj_val
+        st.caption(f"📐 **Projected Allocation:** Train ~ **{proj_train:,}** imgs &bull; Val ~ **{proj_val:,}** imgs &bull; Test ~ **{proj_test:,}** imgs")
+
+    chosen_ratios = (train_ratio / 100.0, val_ratio / 100.0, test_ratio / 100.0)
+    btn_label = f"🔄 Execute Stratified Train/Val/Test Split ({train_ratio}% / {val_ratio}% / {test_ratio}%)"
+
+    if st.button(btn_label, type="primary", key="btn_split_dataset", disabled=(total_raw == 0)):
+        with st.spinner(f"Partitioning {total_raw:,} images into {train_ratio}/{val_ratio}/{test_ratio} splits..."):
             try:
-                split_dataset(force=True)
-                st.success("Stratified split completed successfully!")
+                split_dataset(force=True, split_ratios=chosen_ratios)
+                st.success(f"Stratified partition ({train_ratio}/{val_ratio}/{test_ratio}) completed successfully!")
+                st.cache_data.clear()
                 st.rerun()
             except Exception as exc:
                 st.error(f"Partition error: {exc}")
@@ -1302,13 +1369,18 @@ with tab_dataset:
     )
     insp_dir = config.RAW_DIR / inspect_cls
     if insp_dir.is_dir():
-        cand_files = [f for f in insp_dir.iterdir() if f.is_file() and f.suffix.lower() in config.IMAGE_EXTENSIONS]
+        cand_files = sorted([f for f in insp_dir.iterdir() if f.is_file() and f.suffix.lower() in config.IMAGE_EXTENSIONS])
         if cand_files:
-            picks = random.sample(cand_files, min(len(cand_files), 6))
+            seed = st.session_state.get(f"sample_seed_{inspect_cls}", 42)
+            rng = random.Random(seed)
+            picks = rng.sample(cand_files, min(len(cand_files), 6))
             g_cols = st.columns(len(picks))
             for p_idx, p_path in enumerate(picks):
                 with g_cols[p_idx]:
                     st.image(str(p_path), caption=p_path.name, width="stretch")
+            if st.button("🎲 Shuffle Sample Images", key=f"btn_shuffle_{inspect_cls}"):
+                st.session_state[f"sample_seed_{inspect_cls}"] = random.randint(1, 100000)
+                st.rerun()
         else:
             st.info(f"No image files present in category '{inspect_cls}'.")
 
@@ -1349,9 +1421,16 @@ with tab_model:
         fine_ep_slider = st.slider("Phase 2 Fine-Tuning Epochs", min_value=1, max_value=5, value=2, key="retrain_fine_ep_slider") if fine_tune_chk else 0
         quick_chk = st.checkbox("Quick Demo Mode (Balanced subset for fast execution)", value=True, key="quick_retrain_chk")
 
+        if split_stats["train"] == 0:
+            if total_raw > 0:
+                st.info(f"ℹ️ Found {total_raw:,} raw images unpartitioned. Launching training will automatically partition the dataset.")
+            else:
+                st.warning("⚠️ Corpus is currently empty (0 images). Please extract or download dataset in Tab 4 (Dataset Hub) before training.")
+
         tr_col1, tr_col2 = st.columns(2)
         with tr_col1:
-            if st.button("🔥 Launch Model Training", key="btn_trigger_train", type="primary", width="stretch"):
+            btn_disabled = (total_raw == 0 and split_stats["train"] == 0)
+            if st.button("🔥 Launch Model Training", key="btn_trigger_train", type="primary", width="stretch", disabled=btn_disabled):
                 with st.spinner("Training MobileNetV2 with transfer learning..."):
                     try:
                         from src.train import train_pytorch
@@ -1360,7 +1439,17 @@ with tab_model:
                         st.cache_resource.clear()
                         st.rerun()
                     except Exception as exc:
-                        st.error(f"Training run failed: {exc}")
+                        err_str = str(exc)
+                        if "num_samples" in err_str or "0 image samples" in err_str or "0 sample weights" in err_str:
+                            st.error(
+                                "❌ **Training Failed - Dataset Empty or Unpartitioned:**\n\n"
+                                "PyTorch cannot train because `data/processed/train` contains 0 images.\n\n"
+                                "👉 **How to fix:** Go to **Tab 4 (Dataset Hub)** and either:\n"
+                                "1. Click **'Extract Dataset Archive'** if you haven't extracted your images, or\n"
+                                "2. Click **'Execute Stratified Train/Val/Test Split'** to partition your raw data."
+                            )
+                        else:
+                            st.error(f"Training run failed: {exc}")
 
         with tr_col2:
             if st.button("🧪 Evaluate Test Set (2.3k)", key="btn_eval_test", width="stretch"):

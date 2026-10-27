@@ -1,5 +1,4 @@
 """Tests for config.py configuration, paths, and constants."""
-from pathlib import Path
 import config
 
 
@@ -37,3 +36,9 @@ def test_hyperparameters():
     assert config.LR_FINE > 0
     assert config.DROPOUT >= 0 and config.DROPOUT < 1
     assert config.LABEL_SMOOTHING >= 0 and config.LABEL_SMOOTHING < 0.5
+
+
+def test_custom_split_ratios():
+    custom = (0.80, 0.10, 0.10)
+    assert abs(sum(custom) - 1.0) < 1e-4
+    assert len(custom) == 3

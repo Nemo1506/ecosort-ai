@@ -136,17 +136,57 @@ def train_pytorch(epochs: int = 5, fine_tune: bool = False, fine_epochs: int = 3
     train_ds = GarbageDataset(config.TRAIN_DIR, transform=train_transform, max_per_class=max_samples)
     val_ds = GarbageDataset(config.VAL_DIR, transform=eval_transform, max_per_class=50 if quick else None)
 
+    # Auto-repair / auto-partition if training split is empty but raw images or archive zip exist
+    if len(train_ds) == 0:
+        raw_count = 0
+        if config.RAW_DIR.exists():
+            raw_count = sum(
+                1 for cls in config.CLASS_NAMES
+                if (config.RAW_DIR / cls).is_dir()
+                for f in (config.RAW_DIR / cls).iterdir()
+                if f.is_file() and f.suffix.lower() in config.IMAGE_EXTENSIONS
+            )
+        if raw_count > 0:
+            print(f"Notice: Processed train directory was empty, but found {raw_count} raw images in data/raw. Auto-partitioning...")
+            from src.prepare_data import split_dataset
+            split_dataset()
+            train_ds = GarbageDataset(config.TRAIN_DIR, transform=train_transform, max_per_class=max_samples)
+            val_ds = GarbageDataset(config.VAL_DIR, transform=eval_transform, max_per_class=50 if quick else None)
+        else:
+            from src.download_dataset import detect_local_zip, extract_dataset_zip
+            found_zip = detect_local_zip()
+            if found_zip:
+                print(f"Notice: Auto-extracting dataset from {found_zip.name}...")
+                extract_dataset_zip(found_zip)
+                from src.prepare_data import split_dataset
+                split_dataset()
+                train_ds = GarbageDataset(config.TRAIN_DIR, transform=train_transform, max_per_class=max_samples)
+                val_ds = GarbageDataset(config.VAL_DIR, transform=eval_transform, max_per_class=50 if quick else None)
+
+    if len(train_ds) == 0:
+        raise ValueError(
+            "Training dataset contains 0 image samples. "
+            "Please unpack or split the dataset in Tab 4 (Dataset Hub) or place images in 'data/raw'."
+        )
+
     print(f"Dataset loaded: {len(train_ds)} training images, {len(val_ds)} validation images")
 
-    batch_size = 64
+    batch_size = min(64, max(1, len(train_ds)))
     # Balanced class sampler to equalize class exposure during training
     targets = [target for _, target in train_ds.samples]
     class_counts = np.bincount(targets, minlength=config.NUM_CLASSES)
     class_weights = 1.0 / np.maximum(class_counts, 1)
     sample_weights = torch.tensor([class_weights[t] for t in targets], dtype=torch.float32)
-    sampler = torch.utils.data.WeightedRandomSampler(sample_weights, num_samples=len(sample_weights), replacement=True)
+    num_samples = len(sample_weights)
+    if num_samples <= 0:
+        raise ValueError("Cannot train model: Training dataset has 0 samples.")
+    sampler = torch.utils.data.WeightedRandomSampler(sample_weights, num_samples=num_samples, replacement=True)
     train_loader = DataLoader(train_ds, batch_size=batch_size, sampler=sampler, num_workers=0)
-    val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False, num_workers=0)
+
+    if len(val_ds) > 0:
+        val_loader = DataLoader(val_ds, batch_size=min(batch_size, len(val_ds)), shuffle=False, num_workers=0)
+    else:
+        val_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=False, num_workers=0)
 
     # Build MobileNetV2 with ImageNet pre-trained weights
     print("Loading MobileNetV2 with ImageNet pre-trained weights...")

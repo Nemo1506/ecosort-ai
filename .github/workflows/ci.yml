@@ -33,7 +33,7 @@ jobs:
 
       - name: Python Syntax & Byte-Compile Validation
         run: |
-          python -m py_compile main.py app.py config.py src/*.py
+          python -m compileall -q .
 
       - name: Execute Automated Test Suite
         run: |

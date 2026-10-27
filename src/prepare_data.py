@@ -43,9 +43,10 @@ def _list_valid_images(class_dir: Path) -> list:
     return valid
 
 
-def split_dataset(force: bool = False) -> None:
+def split_dataset(force: bool = False, split_ratios: tuple = None) -> None:
     """Stratified (per-class) split of data/raw into data/processed/{train,val,test}."""
-    assert abs(sum(config.SPLIT) - 1.0) < 1e-6, "config.SPLIT must sum to 1.0"
+    ratios = tuple(split_ratios) if split_ratios is not None else config.SPLIT
+    assert abs(sum(ratios) - 1.0) < 1e-4, f"split_ratios must sum to 1.0 (got {sum(ratios)})"
     config.ensure_dirs()
 
     if config.TRAIN_DIR.exists() and any(config.TRAIN_DIR.iterdir()):
@@ -55,7 +56,7 @@ def split_dataset(force: bool = False) -> None:
         shutil.rmtree(config.PROCESSED_DIR)
         config.PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
 
-    train_frac, val_frac, test_frac = config.SPLIT
+    train_frac, val_frac, test_frac = ratios
     summary = {}
     rnd = random.Random(config.SEED)
 
@@ -160,7 +161,8 @@ def compute_class_weights() -> dict:
     counts = []
     for cls in config.CLASS_NAMES:
         d = config.TRAIN_DIR / cls
-        counts.append(sum(1 for f in d.iterdir() if f.suffix.lower() in config.IMAGE_EXTENSIONS))
+        c = sum(1 for f in d.iterdir() if f.suffix.lower() in config.IMAGE_EXTENSIONS) if d.exists() else 0
+        counts.append(max(c, 1))
     total = sum(counts)
     n = len(counts)
     return {i: total / (n * c) for i, c in enumerate(counts)}
