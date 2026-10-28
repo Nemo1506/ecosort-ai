@@ -1,3 +1,57 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ecosort-ai"
+version = "1.0.0"
+description = "EcoSort AI: Autonomous Municipal Waste Segregation & Deep Learning Vision Platform"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+    { name = "EcoSort AI Team" }
+]
+keywords = [
+    "waste-management",
+    "sustainability",
+    "computer-vision",
+    "deep-learning",
+    "recycling",
+    "circular-economy",
+    "esg",
+    "streamlit",
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+dependencies = [
+    "torch>=2.0.0",
+    "torchvision>=0.15.0",
+    "onnx>=1.14.0",
+    "onnxruntime>=1.15.0",
+    "numpy>=1.24.0",
+    "pillow>=9.5.0",
+    "matplotlib>=3.7.0",
+    "scikit-learn>=1.2.0",
+    "streamlit>=1.30.0",
+    "kagglehub>=0.2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "ruff>=0.3.0",
+]
+
 [tool.ruff]
 line-length = 120
 target-version = "py310"

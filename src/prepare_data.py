@@ -44,7 +44,46 @@ def _list_valid_images(class_dir: Path) -> list:
     return valid
 
 
-def split_dataset(force: bool = False, split_ratios: tuple = None) -> None:
+def _safe_rmtree(target_dir: Path, retries: int = 3, delay: float = 0.2) -> None:
+    """Safely remove a directory tree on Windows, handling read-only flags and file locks."""
+    if not target_dir.exists():
+        return
+    import os
+    import stat
+    import time
+
+    def _remove_readonly(func, path, _):
+        try:
+            os.chmod(path, stat.S_IWRITE)
+            func(path)
+        except Exception:
+            pass
+
+    for attempt in range(retries):
+        try:
+            shutil.rmtree(target_dir, onerror=_remove_readonly)
+            break
+        except Exception:
+            if attempt < retries - 1:
+                time.sleep(delay)
+            else:
+                for root, dirs, files in os.walk(str(target_dir), topdown=False):
+                    for name in files:
+                        p = Path(root) / name
+                        try:
+                            os.chmod(p, stat.S_IWRITE)
+                            p.unlink(missing_ok=True)
+                        except Exception:
+                            pass
+                    for name in dirs:
+                        p = Path(root) / name
+                        try:
+                            p.rmdir()
+                        except Exception:
+                            pass
+
+
+def split_dataset(force: bool = False, split_ratios: tuple = None) -> dict:
     """Stratified (per-class) split of data/raw into data/processed/{train,val,test}."""
     ratios = tuple(split_ratios) if split_ratios is not None else config.SPLIT
     assert abs(sum(ratios) - 1.0) < 1e-4, f"split_ratios must sum to 1.0 (got {sum(ratios)})"
@@ -53,8 +92,8 @@ def split_dataset(force: bool = False, split_ratios: tuple = None) -> None:
     if config.TRAIN_DIR.exists() and any(config.TRAIN_DIR.iterdir()):
         if not force:
             print("data/processed already exists. Use --force to redo the split.")
-            return
-        shutil.rmtree(config.PROCESSED_DIR)
+            return {"status": "skipped", "message": "already_exists"}
+        _safe_rmtree(config.PROCESSED_DIR)
         config.PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
 
     train_frac, val_frac, test_frac = ratios
@@ -96,6 +135,7 @@ def split_dataset(force: bool = False, split_ratios: tuple = None) -> None:
         print(f"{cls:<12} {counts[0]:>6} {counts[1]:>6} {counts[2]:>6}")
         totals = [t + c for t, c in zip(totals, counts)]
     print(f"{'TOTAL':<12} {totals[0]:>6} {totals[1]:>6} {totals[2]:>6}")
+    return {"train": totals[0], "val": totals[1], "test": totals[2], "by_class": summary}
 
 
 # ---------------------------------------------------------------- loaders

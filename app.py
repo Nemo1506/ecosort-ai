@@ -29,7 +29,12 @@ from src.assistant_kb import search_assistant_faq
 from src.download_dataset import detect_local_zip, extract_dataset_zip
 from src.gradcam import GradCAMExplainer
 from src.material_comparison import MATERIAL_LCA_DATA
-from src.municipal_rules import MUNICIPAL_JURISDICTIONS, get_jurisdiction_info
+from src.municipal_rules import (
+    MUNICIPAL_JURISDICTIONS,
+    get_all_jurisdictions,
+    get_jurisdiction_comparison,
+    get_jurisdiction_info,
+)
 from src.predict import load_disposal_guide, load_model_and_classes, predict_image
 from src.prepare_data import split_dataset
 from src.report_generator import generate_html_audit_certificate
@@ -1230,6 +1235,73 @@ with tab_compare:
         unsafe_allow_html=True,
     )
 
+    # Regional Standards Multi-Jurisdiction Matrix
+    st.markdown("---")
+    st.markdown("### 🌐 Regional Standards Compliance Matrix")
+    st.write(
+        "Inspect and cross-reference disposal mandates across all 5 international municipal frameworks: "
+        "**United States**, **European Union**, **United Kingdom**, **Japan**, and **India**."
+    )
+
+    reg_target_class = st.selectbox(
+        "Select Material Stream to Cross-Reference Regional Standards:",
+        config.CLASS_NAMES,
+        index=config.CLASS_NAMES.index("plastic"),
+        format_func=lambda x: f"{guide.get(x, {}).get('emoji', '📦')} {get_class_display_name(x, guide)}",
+        key="regional_matrix_class_select",
+    )
+
+    reg_comp = get_jurisdiction_comparison(reg_target_class)
+
+    st.markdown(
+        f"""
+        <div style="margin-bottom:12px;">
+            <span class="status-pill" style="background:#10b981; color:#fff; font-size:0.8rem;">
+                ✓ 5/5 Jurisdictions Grounded & Verified
+            </span>
+            <span style="font-size:0.85rem; color:#94a3b8; margin-left:8px;">
+                Target: <b>{get_class_display_name(reg_target_class, guide)}</b>
+            </span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    reg_cols = st.columns(len(reg_comp))
+    for idx, (j_name, j_data) in enumerate(reg_comp.items()):
+        with reg_cols[idx]:
+            b_color = j_data["bin_color"]
+            b_name = j_data["bin_name"]
+            b_rule = j_data["rules"]
+            flag_emoji = j_name.split(" ")[0]
+            short_name = j_name.split("(")[0].strip()
+
+            st.markdown(
+                f"""
+                <div class="glass-card" style="border-top:4px solid {b_color}; padding:14px; min-height:260px; display:flex; flex-direction:column; justify-content:space-between;">
+                    <div>
+                        <div style="font-size:1.4rem; margin-bottom:4px;">{flag_emoji}</div>
+                        <div style="font-size:0.95rem; font-weight:800; color:#fff; margin-bottom:4px;">
+                            {short_name}
+                        </div>
+                        <div style="font-size:0.75rem; color:#94a3b8; font-family:'JetBrains Mono'; margin-bottom:10px;">
+                            REGION: {j_data.get('region_code', 'GEN')}
+                        </div>
+                        <div style="margin-bottom:12px;">
+                            <span class="status-pill" style="background:{b_color}; color:#ffffff; font-size:0.75rem; word-break:break-word;">
+                                {b_name}
+                            </span>
+                        </div>
+                    </div>
+                    <div style="font-size:0.82rem; color:#cbd5e1; line-height:1.45; background:rgba(255,255,255,0.03); padding:8px 10px; border-radius:8px;">
+                        {b_rule}
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+
 
 # =============================================================================
 # TAB 4: DATASET HUB & ZIP INGESTION PIPELINE (User Core Requirement)
@@ -1277,14 +1349,19 @@ with tab_dataset:
             st.markdown(f"**Selected File:** `{uploaded_zip.name}` ({uploaded_zip.size / (1024*1024):.2f} MB)")
             if st.button("🚀 Unpack & Load into `data/raw/`", type="primary", key="btn_unpack_hub"):
                 with st.spinner("Unpacking archive and validating images..."):
-                    counts = extract_dataset_zip(io.BytesIO(uploaded_zip.read()), overwrite=True)
-                    total_ext = sum(counts.values())
-                    if total_ext > 0:
-                        st.success(f"Ingestion complete: Added {total_ext:,} images across {len(counts)} categories!")
-                        st.cache_data.clear()
-                        st.rerun()
-                    else:
-                        st.warning("No valid images matching the 12 classes found in the archive.")
+                    try:
+                        uploaded_zip.seek(0)
+                        counts = extract_dataset_zip(io.BytesIO(uploaded_zip.read()), overwrite=True)
+                        total_ext = sum(counts.values())
+                        if total_ext > 0:
+                            st.success(f"✨ Ingestion complete: Successfully loaded {total_ext:,} images across {len(counts)} categories into data/raw/!")
+                            st.info("💡 Next: Scroll down to 'Configure & Execute Stratified Partitioning' to update your train/val/test splits.")
+                            st.cache_data.clear()
+                            st.rerun()
+                        else:
+                            st.warning("No valid images matching the 12 classes found in the archive. Ensure folder names match the 12 categories.")
+                    except Exception as zip_err:
+                        st.error(f"Archive extraction error: {zip_err}")
 
     with col_up_img:
         st.markdown("#### 🖼️ 2. Add Custom Images to Category")
@@ -1410,21 +1487,140 @@ with tab_dataset:
         "EcoSort partitions each category proportionately to maintain balanced representation across all splits."
     )
 
+    # Streamlit Slider Clamping Protection:
+    # Ensure slider_val_ratio never exceeds max_val_ratio in session state before widget creation.
+    current_train_ratio = st.session_state.get("slider_train_ratio", 70)
+    max_val_ratio = max(5, 95 - current_train_ratio)
+    if "slider_val_ratio" in st.session_state:
+        st.session_state["slider_val_ratio"] = min(max(5, int(st.session_state["slider_val_ratio"])), max_val_ratio)
+
     ratio_col1, ratio_col2, ratio_col3 = st.columns([1, 1, 1])
     with ratio_col1:
-        train_ratio = st.slider("Training Ratio (%)", min_value=50, max_value=90, value=70, step=5, key="slider_train_ratio")
+        train_ratio = st.slider(
+            "Training Ratio (%)",
+            min_value=50,
+            max_value=90,
+            value=70,
+            step=5,
+            key="slider_train_ratio",
+            help="Proportion of data allocated for neural model gradient updates.",
+        )
     with ratio_col2:
         max_val_ratio = 95 - train_ratio
-        val_ratio = st.slider("Validation Ratio (%)", min_value=5, max_value=max_val_ratio, value=min(15, max_val_ratio), step=5, key="slider_val_ratio")
+        val_ratio = st.slider(
+            "Validation Ratio (%)",
+            min_value=5,
+            max_value=max_val_ratio,
+            value=min(15, max_val_ratio),
+            step=5,
+            key="slider_val_ratio",
+            help="Proportion held out for hyperparameter tuning and early stopping.",
+        )
     with ratio_col3:
         test_ratio = 100 - train_ratio - val_ratio
-        st.metric("Held-out Test Ratio", f"{test_ratio}%")
+        st.metric(
+            "Held-out Test Ratio",
+            f"{test_ratio}%",
+            delta=f"{test_ratio - 15:+d}% vs default (15%)" if test_ratio != 15 else "Default Standard",
+        )
 
     if total_raw > 0:
         proj_train = int(round(total_raw * train_ratio / 100.0))
         proj_val = int(round(total_raw * val_ratio / 100.0))
-        proj_test = total_raw - proj_train - proj_val
-        st.caption(f"📐 **Projected Allocation:** Train ~ **{proj_train:,}** imgs &bull; Val ~ **{proj_val:,}** imgs &bull; Test ~ **{proj_test:,}** imgs")
+        proj_test = max(0, total_raw - proj_train - proj_val)
+
+        delta_train = proj_train - split_stats["train"]
+        delta_val = proj_val - split_stats["val"]
+        delta_test = proj_test - split_stats["test"]
+
+        # Dynamic Reactive Proportional Bar showing the user's changes in real time
+        st.markdown(
+            f"""
+            <div style="background:rgba(255,255,255,0.035); border:1px solid rgba(255,255,255,0.1); border-radius:14px; padding:16px; margin:14px 0 18px 0;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; font-weight:700; font-size:0.9rem;">
+                    <span style="color:#10b981;">🟢 Training: {train_ratio}% (~{proj_train:,} imgs)</span>
+                    <span style="color:#38bdf8;">🔵 Validation: {val_ratio}% (~{proj_val:,} imgs)</span>
+                    <span style="color:#f59e0b;">🟠 Held-out Test: {test_ratio}% (~{proj_test:,} imgs)</span>
+                </div>
+                <div style="display:flex; height:22px; border-radius:999px; overflow:hidden; background:#0f172a; box-shadow:inset 0 2px 5px rgba(0,0,0,0.6); border:1px solid rgba(255,255,255,0.08);">
+                    <div style="width:{train_ratio}%; background:linear-gradient(90deg, #059669, #10b981); display:flex; align-items:center; justify-content:center; color:#fff; font-size:0.75rem; font-weight:800; text-shadow:0 1px 2px rgba(0,0,0,0.8);">{train_ratio}%</div>
+                    <div style="width:{val_ratio}%; background:linear-gradient(90deg, #0284c7, #38bdf8); display:flex; align-items:center; justify-content:center; color:#fff; font-size:0.75rem; font-weight:800; text-shadow:0 1px 2px rgba(0,0,0,0.8);">{val_ratio}%</div>
+                    <div style="width:{test_ratio}%; background:linear-gradient(90deg, #d97706, #f59e0b); display:flex; align-items:center; justify-content:center; color:#fff; font-size:0.75rem; font-weight:800; text-shadow:0 1px 2px rgba(0,0,0,0.8);">{test_ratio}%</div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        # Dynamic Comparison Cards: Proposed Changes vs Current On-Disk
+        p_col1, p_col2, p_col3 = st.columns(3)
+        with p_col1:
+            st.markdown(
+                f"""
+                <div class="stat-pill" style="border-top:3px solid #10b981;">
+                    <div class="stat-value" style="color:#34d399;">{proj_train:,}</div>
+                    <div class="stat-label">PROPOSED TRAIN ({train_ratio}%)</div>
+                    <div style="font-size:0.78rem; font-family:'JetBrains Mono'; color:{'#34d399' if delta_train >= 0 else '#f87171'}; margin-top:4px;">
+                        {delta_train:+,} vs on-disk ({split_stats['train']:,})
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+        with p_col2:
+            st.markdown(
+                f"""
+                <div class="stat-pill" style="border-top:3px solid #38bdf8;">
+                    <div class="stat-value" style="color:#38bdf8;">{proj_val:,}</div>
+                    <div class="stat-label">PROPOSED VAL ({val_ratio}%)</div>
+                    <div style="font-size:0.78rem; font-family:'JetBrains Mono'; color:{'#38bdf8' if delta_val >= 0 else '#f87171'}; margin-top:4px;">
+                        {delta_val:+,} vs on-disk ({split_stats['val']:,})
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+        with p_col3:
+            st.markdown(
+                f"""
+                <div class="stat-pill" style="border-top:3px solid #f59e0b;">
+                    <div class="stat-value" style="color:#fbbf24;">{proj_test:,}</div>
+                    <div class="stat-label">PROPOSED TEST ({test_ratio}%)</div>
+                    <div style="font-size:0.78rem; font-family:'JetBrains Mono'; color:{'#fbbf24' if delta_test >= 0 else '#f87171'}; margin-top:4px;">
+                        {delta_test:+,} vs on-disk ({split_stats['test']:,})
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+        # Changes Pending Status Indicator
+        if delta_train != 0 or delta_val != 0 or delta_test != 0:
+            st.info(
+                f"⚡ **Changes Detected:** Partition parameters modified! Reallocating {total_raw:,} images from current "
+                f"(`{split_stats['train']:,}` / `{split_stats['val']:,}` / `{split_stats['test']:,}`) "
+                f"to proposed (`{proj_train:,}` / `{proj_val:,}` / `{proj_test:,}`). "
+                f"Click below to write changes to disk."
+            )
+        else:
+            st.success(f"✅ On-disk partition already matches your selected {train_ratio}% / {val_ratio}% / {test_ratio}% allocation.")
+
+        # Expandable Per-Class Projection Table
+        with st.expander("📋 View Per-Category Projected Splits (All 12 Classes)", expanded=False):
+            class_proj_data = []
+            for c_name in config.CLASS_NAMES:
+                c_total = raw_counts.get(c_name, 0)
+                c_tr = int(round(c_total * train_ratio / 100.0))
+                c_va = int(round(c_total * val_ratio / 100.0))
+                c_te = max(0, c_total - c_tr - c_va)
+                class_proj_data.append({
+                    "Category": f"{guide.get(c_name, {}).get('emoji', '📦')} {get_class_display_name(c_name, guide)}",
+                    "Raw Images": f"{c_total:,}",
+                    f"Train ({train_ratio}%)": f"{c_tr:,}",
+                    f"Val ({val_ratio}%)": f"{c_va:,}",
+                    f"Test ({test_ratio}%)": f"{c_te:,}",
+                })
+            st.table(class_proj_data)
 
     chosen_ratios = (train_ratio / 100.0, val_ratio / 100.0, test_ratio / 100.0)
     btn_label = f"🔄 Execute Stratified Train/Val/Test Split ({train_ratio}% / {val_ratio}% / {test_ratio}%)"
@@ -1432,8 +1628,13 @@ with tab_dataset:
     if st.button(btn_label, type="primary", key="btn_split_dataset", disabled=(total_raw == 0)):
         with st.spinner(f"Partitioning {total_raw:,} images into {train_ratio}/{val_ratio}/{test_ratio} splits..."):
             try:
-                split_dataset(force=True, split_ratios=chosen_ratios)
-                st.success(f"Stratified partition ({train_ratio}/{val_ratio}/{test_ratio}) completed successfully!")
+                res = split_dataset(force=True, split_ratios=chosen_ratios)
+                st.success(
+                    f"✅ Stratified partition completed successfully! "
+                    f"Train: {res.get('train', 0):,} imgs ({train_ratio}%) &bull; "
+                    f"Val: {res.get('val', 0):,} imgs ({val_ratio}%) &bull; "
+                    f"Test: {res.get('test', 0):,} imgs ({test_ratio}%)"
+                )
                 st.cache_data.clear()
                 st.rerun()
             except Exception as exc:

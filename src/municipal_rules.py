@@ -352,3 +352,28 @@ def get_jurisdiction_info(jurisdiction_name: str, class_key: str) -> Dict[str, s
         "bin_color": "#10b981",
         "rules": "Segregate according to local rules.",
     })
+
+
+def get_all_jurisdictions() -> list:
+    """Return list of all registered municipal jurisdiction names."""
+    return list(MUNICIPAL_JURISDICTIONS.keys())
+
+
+def get_jurisdiction_comparison(class_key: str) -> Dict[str, Dict[str, str]]:
+    """Return dictionary comparing disposal rules across all 5 jurisdictions for a given class."""
+    comparison = {}
+    for jur_name, jur_data in MUNICIPAL_JURISDICTIONS.items():
+        bin_info = jur_data["bins"].get(class_key, {
+            "bin_name": "Designated Recyclable Container",
+            "bin_color": "#10b981",
+            "rules": "Segregate according to local municipal rules.",
+        })
+        comparison[jur_name] = {
+            "region_code": jur_data.get("region_code", "GEN"),
+            "description": jur_data.get("description", ""),
+            "bin_name": bin_info["bin_name"],
+            "bin_color": bin_info["bin_color"],
+            "rules": bin_info["rules"],
+        }
+    return comparison
+

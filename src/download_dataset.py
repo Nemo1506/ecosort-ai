@@ -66,7 +66,7 @@ def extract_dataset_zip(
             if member.startswith("__MACOSX") or member.endswith("/"):
                 continue
 
-            parts = [p.strip() for p in member.split("/") if p.strip()]
+            parts = [p.strip() for p in member.replace("\\", "/").split("/") if p.strip()]
             if len(parts) < 2:
                 continue
 
@@ -78,9 +78,10 @@ def extract_dataset_zip(
             if ext not in config.IMAGE_EXTENSIONS:
                 continue
 
-            for i, part in enumerate(parts[:-1]):
-                if part.lower() in class_set:
-                    matched_cls = part.lower()
+            for part in parts[:-1]:
+                norm = part.replace("_", "-").replace(" ", "-").lower()
+                if norm in class_set:
+                    matched_cls = norm
                     break
 
             if matched_cls is not None:
