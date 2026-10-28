@@ -26,3 +26,29 @@ def test_faq_search_exact_and_fuzzy():
     # Test unknown query fallback
     results_empty = search_assistant_faq("")
     assert len(results_empty) > 0  # Returns default suggestions
+
+
+def test_generate_assistant_response_black_plastic():
+    from src.assistant_kb import generate_assistant_response
+
+    resp = generate_assistant_response(
+        "Can I recycle a black plastic food tray marked with a recycling symbol",
+        jurisdiction="United States"
+    )
+    assert "black plastic" in resp["headline"].lower()
+    assert "DO NOT RECYCLE" in resp["verdict"].upper()
+    assert "No" in resp["direct_answer"]
+    assert "infrared" in resp["scientific_reason"].lower() or "nir" in resp["scientific_reason"].lower()
+    assert len(resp["action_steps"]) >= 3
+    assert "Landfill" in resp["target_bin"] or "Trash" in resp["target_bin"]
+
+
+def test_generate_assistant_response_jurisdiction_bins():
+    from src.assistant_kb import generate_assistant_response
+
+    resp_us = generate_assistant_response("pizza box grease", jurisdiction="United States")
+    resp_uk = generate_assistant_response("pizza box grease", jurisdiction="United Kingdom")
+    resp_eu = generate_assistant_response("pizza box grease", jurisdiction="European Union")
+
+    assert resp_us["target_bin"] != resp_uk["target_bin"] or "Cart" in resp_us["target_bin"] or "Bin" in resp_uk["target_bin"]
+    assert "Compost" in resp_us["target_bin"] or "Caddy" in resp_uk["target_bin"] or "Biotonne" in resp_eu["target_bin"]

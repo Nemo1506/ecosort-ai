@@ -3,12 +3,48 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
 
-# Resilient dataset & model path discovery (handles root or nested workspace execution)
-if not (BASE_DIR / "data" / "raw" / "battery").exists():
-    if (BASE_DIR.parent / "data" / "raw" / "battery").exists():
-        BASE_DIR = BASE_DIR.parent
-    elif (BASE_DIR / "ecosort-ai" / "data" / "raw" / "battery").exists():
-        BASE_DIR = BASE_DIR / "ecosort-ai"
+# Resilient dataset & model path discovery (handles root or nested workspace execution, GitHub zip downloads, etc.)
+def _find_best_base_dir(start_dir: Path) -> Path:
+    candidates = [
+        start_dir,
+        start_dir.parent,
+        start_dir / "ecosort-ai",
+        start_dir / "ecosort-ai-main",
+        start_dir.parent / "ecosort-ai",
+        start_dir.parent / "ecosort-ai-main",
+    ]
+
+    def _score(p: Path) -> int:
+        if not p.is_dir():
+            return -1
+        score = 0
+        raw = p / "data" / "raw"
+        if raw.is_dir():
+            for f in raw.iterdir():
+                if f.is_dir() and f.name.lower() in [
+                    "battery", "biological", "brown-glass", "cardboard",
+                    "clothes", "green-glass", "metal", "paper", "plastic",
+                    "shoes", "trash", "white-glass", "garbage_classification",
+                ]:
+                    score += 5
+        proc = p / "data" / "processed" / "train"
+        if proc.is_dir() and any(proc.iterdir()):
+            score += 20
+        for m in ("ecosort_mobilenetv2.pt", "ecosort_mobilenetv2.onnx", "ecosort_mobilenetv2.keras"):
+            if (p / "models" / m).exists():
+                score += 15
+        return score
+
+    best = start_dir
+    best_score = _score(start_dir)
+    for c in candidates[1:]:
+        s = _score(c)
+        if s > best_score:
+            best = c
+            best_score = s
+    return best
+
+BASE_DIR = _find_best_base_dir(BASE_DIR)
 
 # ---------------------------------------------------------------- paths
 RAW_DIR = BASE_DIR / "data" / "raw"

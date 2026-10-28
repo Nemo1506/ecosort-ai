@@ -149,8 +149,29 @@ def evaluate_test_set(batch_size: int = 64) -> Tuple[Dict, str]:
             if p.suffix.lower() in config.IMAGE_EXTENSIONS:
                 test_samples.append((p, idx))
 
+    # Auto-repair / auto-partition if test split is empty but raw images exist
+    if not test_samples and config.RAW_DIR.exists():
+        raw_has_images = any(
+            (config.RAW_DIR / cls).is_dir() and any((config.RAW_DIR / cls).iterdir())
+            for cls in class_names
+        )
+        if raw_has_images:
+            print("Notice: No test samples found in data/processed/test, but raw images found in data/raw. Auto-partitioning...")
+            from src.prepare_data import split_dataset
+            split_dataset(force=True)
+            for idx, cls in enumerate(class_names):
+                cls_dir = config.TEST_DIR / cls
+                if not cls_dir.is_dir():
+                    continue
+                for p in cls_dir.iterdir():
+                    if p.suffix.lower() in config.IMAGE_EXTENSIONS:
+                        test_samples.append((p, idx))
+
     if not test_samples:
-        raise FileNotFoundError("No test samples found in data/processed/test. Run: python src/prepare_data.py")
+        raise FileNotFoundError(
+            "No test samples found in data/processed/test. "
+            "Please partition the dataset in Tab 4 (Dataset Hub) or run: python src/prepare_data.py"
+        )
 
     print(f"Evaluating {len(test_samples)} test images using batched inference (batch_size={batch_size})...")
     t0 = time.time()

@@ -25,7 +25,7 @@ BASE_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(BASE_DIR))
 
 import config
-from src.assistant_kb import search_assistant_faq
+from src.assistant_kb import generate_assistant_response, search_assistant_faq
 from src.download_dataset import detect_local_zip, extract_dataset_zip
 from src.gradcam import GradCAMExplainer
 from src.material_comparison import MATERIAL_LCA_DATA
@@ -341,11 +341,26 @@ def get_dataset_counts() -> Tuple[Dict[str, int], int]:
     counts = {}
     total = 0
     raw_dir = config.RAW_DIR
-    if not (raw_dir / "battery").exists():
-        if (config.BASE_DIR.parent / "data" / "raw" / "battery").exists():
-            raw_dir = config.BASE_DIR.parent / "data" / "raw"
-        elif (config.BASE_DIR / "ecosort-ai" / "data" / "raw" / "battery").exists():
-            raw_dir = config.BASE_DIR / "ecosort-ai" / "data" / "raw"
+    candidates = [
+        raw_dir,
+        config.BASE_DIR / "data" / "raw",
+        config.BASE_DIR.parent / "data" / "raw",
+        config.BASE_DIR / "ecosort-ai" / "data" / "raw",
+        config.BASE_DIR / "ecosort-ai-main" / "data" / "raw",
+        config.BASE_DIR.parent / "ecosort-ai" / "data" / "raw",
+        config.BASE_DIR.parent / "ecosort-ai-main" / "data" / "raw",
+    ]
+    for c in candidates:
+        if c.is_dir() and any((c / cls).is_dir() for cls in config.CLASS_NAMES):
+            raw_dir = c
+            break
+
+    # Auto-detect nested folder like data/raw/garbage_classification/<class>
+    if raw_dir.is_dir() and not any((raw_dir / cls).is_dir() for cls in config.CLASS_NAMES):
+        for sub in raw_dir.iterdir():
+            if sub.is_dir() and any((sub / cls).is_dir() for cls in config.CLASS_NAMES):
+                raw_dir = sub
+                break
 
     for cls in config.CLASS_NAMES:
         p = raw_dir / cls
@@ -362,11 +377,19 @@ def get_split_counts() -> Dict[str, int]:
     """Count images in train, val, and test partitions."""
     result = {"train": 0, "val": 0, "test": 0}
     proc_dir = config.PROCESSED_DIR
-    if not (proc_dir / "train").exists():
-        if (config.BASE_DIR.parent / "data" / "processed" / "train").exists():
-            proc_dir = config.BASE_DIR.parent / "data" / "processed"
-        elif (config.BASE_DIR / "ecosort-ai" / "data" / "processed" / "train").exists():
-            proc_dir = config.BASE_DIR / "ecosort-ai" / "data" / "processed"
+    candidates = [
+        proc_dir,
+        config.BASE_DIR / "data" / "processed",
+        config.BASE_DIR.parent / "data" / "processed",
+        config.BASE_DIR / "ecosort-ai" / "data" / "processed",
+        config.BASE_DIR / "ecosort-ai-main" / "data" / "processed",
+        config.BASE_DIR.parent / "ecosort-ai" / "data" / "processed",
+        config.BASE_DIR.parent / "ecosort-ai-main" / "data" / "processed",
+    ]
+    for c in candidates:
+        if (c / "train").is_dir():
+            proc_dir = c
+            break
 
     for s in ("train", "val", "test"):
         d = proc_dir / s
@@ -1090,17 +1113,20 @@ with tab_assistant:
     )
 
     st.markdown("##### 💡 Suggested Instant Inquiries:")
-    chip_col1, chip_col2, chip_col3, chip_col4 = st.columns(4)
+    chip_col1, chip_col2, chip_col3, chip_col4, chip_col5 = st.columns(5)
     with chip_col1:
+        if st.button("🍱 Black Plastic Trays?", key="faq_btn_black", width="stretch"):
+            st.session_state["faq_query_input"] = "Can I recycle a black plastic food tray marked with a recycling symbol"
+    with chip_col2:
         if st.button("🍕 Greasy Pizza Boxes?", key="faq_btn_pizza", width="stretch"):
             st.session_state["faq_query_input"] = "pizza box grease"
-    with chip_col2:
-        if st.button("☕ Takeaway Coffee Cups?", key="faq_btn_coffee", width="stretch"):
-            st.session_state["faq_query_input"] = "coffee cup lid"
     with chip_col3:
+        if st.button("☕ Coffee Cups?", key="faq_btn_coffee", width="stretch"):
+            st.session_state["faq_query_input"] = "disposable coffee cup"
+    with chip_col4:
         if st.button("🔋 Swollen Batteries?", key="faq_btn_batt", width="stretch"):
             st.session_state["faq_query_input"] = "swollen battery disposal"
-    with chip_col4:
+    with chip_col5:
         if st.button("🧾 Thermal Receipts?", key="faq_btn_receipt", width="stretch"):
             st.session_state["faq_query_input"] = "thermal receipt bpa paper"
 
@@ -1108,35 +1134,138 @@ with tab_assistant:
     assistant_search = st.text_input(
         "Ask any waste disposal or recycling question:",
         value=default_query,
-        placeholder="e.g. Can I recycle blister packs, styrofoam, lightbulbs, aerosol cans, or broken mirrors?",
+        placeholder="e.g. Can I recycle a black plastic food tray marked with a recycling symbol?",
         key="assistant_search_input",
     )
 
-    matched_answers = search_assistant_faq(assistant_search)
-    st.markdown(f"**Found {len(matched_answers)} matching authoritative guidelines:**")
+    if assistant_search and assistant_search.strip():
+        # Generate the Conversational AI Assistant Response
+        assistant_resp = generate_assistant_response(assistant_search, jurisdiction=selected_jurisdiction)
 
-    for faq_item in matched_answers:
+        # Ambient Assistant Response Card
         st.markdown(
             f"""
-            <div class="glass-card" style="border-left: 4px solid {faq_item['badge_color']};">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                    <div style="font-size:1.25rem; font-weight:800; color:#ffffff;">
-                        {faq_item['question']}
+            <div class="glass-card" style="border: 2px solid {assistant_resp['verdict_badge']}; background: radial-gradient(circle at 10% 20%, rgba(13, 26, 20, 0.95), rgba(6, 14, 10, 0.98)); padding: 26px 28px; margin-top: 14px; margin-bottom: 24px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:12px;">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="font-size:1.5rem;">🤖</span>
+                        <span style="font-size:0.88rem; font-weight:800; letter-spacing:0.08em; color:#38bdf8; text-transform:uppercase;">
+                            EcoSort AI &bull; Verified Assistant Guidance
+                        </span>
                     </div>
-                    <span class="status-pill" style="background:{faq_item['badge_color']}; color:#ffffff; font-size:0.75rem;">
-                        {faq_item['stream']}
+                    <span class="status-pill" style="background:{assistant_resp['verdict_badge']}; color:#ffffff; font-weight:800; font-size:0.82rem; padding: 4px 12px; border-radius:100px;">
+                        {assistant_resp['verdict']}
                     </span>
                 </div>
-                <div style="font-weight:700; color:#34d399; margin-bottom:10px;">
-                    {faq_item['summary']}
+
+                <div style="font-size:1.45rem; font-weight:800; color:#ffffff; margin-bottom:12px; line-height:1.3;">
+                    {assistant_resp['headline']}
                 </div>
-                <div style="color:#cbd5e1; font-size:0.95rem; line-height:1.6;">
-                    {faq_item['answer']}
+
+                <div style="background:rgba(255, 255, 255, 0.04); border-left: 3px solid {assistant_resp['verdict_badge']}; padding: 12px 16px; border-radius:8px; font-size:1.05rem; color:#f1f5f9; line-height:1.6; margin-bottom:16px;">
+                    {assistant_resp['direct_answer']}
+                </div>
+
+                <div style="margin-bottom:16px;">
+                    <div style="font-size:0.95rem; font-weight:700; color:#34d399; margin-bottom:6px; display:flex; align-items:center; gap:6px;">
+                        <span>🔬</span> The Material Science Behind It:
+                    </div>
+                    <div style="font-size:0.9rem; color:#cbd5e1; line-height:1.6;">
+                        {assistant_resp['scientific_reason']}
+                    </div>
+                </div>
+
+                <div style="margin-bottom:18px;">
+                    <div style="font-size:0.95rem; font-weight:700; color:#fbbf24; margin-bottom:6px; display:flex; align-items:center; gap:6px;">
+                        <span>📋</span> Step-by-Step Action Protocol:
+                    </div>
+                    <ul style="margin:0; padding-left:20px; font-size:0.9rem; color:#cbd5e1; line-height:1.7;">
+                        {''.join(f'<li>{step}</li>' for step in assistant_resp['action_steps'])}
+                    </ul>
+                </div>
+
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; padding-top:14px; border-top:1px solid rgba(255,255,255,0.08);">
+                    <div>
+                        <span style="font-size:0.82rem; color:#94a3b8; text-transform:uppercase; font-weight:600;">Target Municipal Stream ({selected_jurisdiction.split(' ')[0]}):</span>
+                        <div style="font-size:1.05rem; font-weight:800; color:{assistant_resp['bin_color']};">
+                            🗑️ {assistant_resp['target_bin']}
+                        </div>
+                    </div>
                 </div>
             </div>
             """,
             unsafe_allow_html=True,
         )
+
+        audio_col1, audio_col2 = st.columns([1, 3])
+        with audio_col1:
+            if st.button("🔊 Read Aloud Assistant Guidance", key="btn_speak_assistant_guide", width="stretch"):
+                play_smart_audio(assistant_resp["audio_summary"])
+
+        # Display relevant deep-dive reference entries if found
+        matched_answers = assistant_resp.get("related_faq", [])
+        if matched_answers:
+            st.markdown(f"##### 📚 Related Authoritative Guidelines ({len(matched_answers)} References):")
+            for faq_item in matched_answers[:3]:
+                st.markdown(
+                    f"""
+                    <div class="glass-card" style="border-left: 4px solid {faq_item['badge_color']}; margin-bottom:12px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                            <div style="font-size:1.15rem; font-weight:800; color:#ffffff;">
+                                {faq_item['question']}
+                            </div>
+                            <span class="status-pill" style="background:{faq_item['badge_color']}; color:#ffffff; font-size:0.75rem;">
+                                {faq_item['stream']}
+                            </span>
+                        </div>
+                        <div style="font-weight:700; color:#34d399; margin-bottom:8px;">
+                            {faq_item['summary']}
+                        </div>
+                        <div style="color:#cbd5e1; font-size:0.9rem; line-height:1.6;">
+                            {faq_item['answer']}
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+    else:
+        st.markdown(
+            """
+            <div class="glass-card" style="text-align:center; padding: 32px 20px; margin-top: 16px; border: 1px dashed rgba(56, 189, 248, 0.4);">
+                <div style="font-size:2rem; margin-bottom:6px;">💬 ♻️</div>
+                <div style="font-size:1.15rem; font-weight:700; color:#38bdf8; margin-bottom:6px;">Ask Any Tricky Recycling Question</div>
+                <div style="font-size:0.9rem; color:#94a3b8; max-width:640px; margin:0 auto;">
+                    Type your question in the search bar above (e.g. <i>"Can I recycle a black plastic food tray marked with a recycling symbol?"</i>) or click one of the quick inquiry buttons to get direct authoritative guidance with step-by-step sorting protocols.
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        st.markdown("##### 📖 Explore Authoritative Municipal Guidelines Library:")
+        all_faqs = search_assistant_faq("")
+        for faq_item in all_faqs:
+            st.markdown(
+                f"""
+                <div class="glass-card" style="border-left: 4px solid {faq_item['badge_color']}; margin-bottom:12px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                        <div style="font-size:1.15rem; font-weight:800; color:#ffffff;">
+                            {faq_item['question']}
+                        </div>
+                        <span class="status-pill" style="background:{faq_item['badge_color']}; color:#ffffff; font-size:0.75rem;">
+                            {faq_item['stream']}
+                        </span>
+                    </div>
+                    <div style="font-weight:700; color:#34d399; margin-bottom:8px;">
+                        {faq_item['summary']}
+                    </div>
+                    <div style="color:#cbd5e1; font-size:0.9rem; line-height:1.6;">
+                        {faq_item['answer']}
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
 
 # =============================================================================
@@ -1764,7 +1893,17 @@ with tab_model:
 
         if split_stats["train"] == 0:
             if total_raw > 0:
-                st.info(f"ℹ️ Found {total_raw:,} raw images unpartitioned. Launching training will automatically partition the dataset.")
+                present_cls = [c for c, n in raw_counts.items() if n > 0]
+                missing_cls = [c for c, n in raw_counts.items() if n == 0]
+                if missing_cls:
+                    st.warning(
+                        f"⚠️ **Partial Dataset Detected ({total_raw:,} images across {len(present_cls)} categories):**\n\n"
+                        f"Present categories: `{', '.join(present_cls)}`.\n"
+                        f"Missing categories ({len(missing_cls)}): `{', '.join(missing_cls[:4])}{'...' if len(missing_cls) > 4 else ''}`.\n\n"
+                        f"Launching training will partition available classes. To train all 12 classes, extract the full Kaggle dataset in **Tab 4 (Dataset Hub)**."
+                    )
+                else:
+                    st.info(f"ℹ️ Found {total_raw:,} raw images unpartitioned across 12 categories. Launching training will automatically partition the dataset.")
             else:
                 st.warning("⚠️ Corpus is currently empty (0 images). Please extract or download dataset in Tab 4 (Dataset Hub) before training.")
 
@@ -1793,8 +1932,11 @@ with tab_model:
                             st.error(f"Training run failed: {exc}")
 
         with tr_col2:
-            if st.button("🧪 Evaluate Test Set (2.3k)", key="btn_eval_test", width="stretch"):
-                with st.spinner("Running fast batched evaluation on held-out test set..."):
+            test_cnt_str = f"({split_stats['test']:,})" if split_stats['test'] > 0 else (f"({int(total_raw * 0.15):,} est.)" if total_raw > 0 else "")
+            eval_btn_text = f"🧪 Evaluate Test Set {test_cnt_str}".strip()
+            eval_disabled = (total_raw == 0 and split_stats["test"] == 0)
+            if st.button(eval_btn_text, key="btn_eval_test", width="stretch", disabled=eval_disabled):
+                with st.spinner("Running batched evaluation on held-out test set..."):
                     try:
                         from src.evaluate import evaluate_test_set
                         m_res, _ = evaluate_test_set()

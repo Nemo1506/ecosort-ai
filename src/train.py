@@ -150,7 +150,7 @@ def train_pytorch(epochs: int = 5, fine_tune: bool = False, fine_epochs: int = 3
         if raw_count > 0:
             print(f"Notice: Processed train directory was empty, but found {raw_count} raw images in data/raw. Auto-partitioning...")
             from src.prepare_data import split_dataset
-            split_dataset()
+            split_dataset(force=True)
             train_ds = GarbageDataset(config.TRAIN_DIR, transform=train_transform, max_per_class=max_samples)
             val_ds = GarbageDataset(config.VAL_DIR, transform=eval_transform, max_per_class=50 if quick else None)
         else:
@@ -160,7 +160,7 @@ def train_pytorch(epochs: int = 5, fine_tune: bool = False, fine_epochs: int = 3
                 print(f"Notice: Auto-extracting dataset from {found_zip.name}...")
                 extract_dataset_zip(found_zip)
                 from src.prepare_data import split_dataset
-                split_dataset()
+                split_dataset(force=True)
                 train_ds = GarbageDataset(config.TRAIN_DIR, transform=train_transform, max_per_class=max_samples)
                 val_ds = GarbageDataset(config.VAL_DIR, transform=eval_transform, max_per_class=50 if quick else None)
 

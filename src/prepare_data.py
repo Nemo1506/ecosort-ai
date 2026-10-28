@@ -89,8 +89,21 @@ def split_dataset(force: bool = False, split_ratios: tuple = None) -> dict:
     assert abs(sum(ratios) - 1.0) < 1e-4, f"split_ratios must sum to 1.0 (got {sum(ratios)})"
     config.ensure_dirs()
 
+    # Auto-discover raw directory if nested inside RAW_DIR (e.g. data/raw/garbage_classification/<class>)
+    raw_source = config.RAW_DIR
+    if raw_source.exists() and not any((raw_source / cls).is_dir() for cls in config.CLASS_NAMES):
+        for candidate in raw_source.iterdir():
+            if candidate.is_dir() and any((candidate / cls).is_dir() for cls in config.CLASS_NAMES):
+                raw_source = candidate
+                print(f"Notice: Auto-detected nested raw directory at {candidate}")
+                break
+
     if config.TRAIN_DIR.exists() and any(config.TRAIN_DIR.iterdir()):
-        if not force:
+        has_train_images = any(
+            f.is_file() and f.suffix.lower() in config.IMAGE_EXTENSIONS
+            for f in config.TRAIN_DIR.rglob("*")
+        )
+        if has_train_images and not force:
             print("data/processed already exists. Use --force to redo the split.")
             return {"status": "skipped", "message": "already_exists"}
         _safe_rmtree(config.PROCESSED_DIR)
@@ -100,24 +113,49 @@ def split_dataset(force: bool = False, split_ratios: tuple = None) -> dict:
     summary = {}
     rnd = random.Random(config.SEED)
 
+    # Collect valid images per class
+    class_images = {}
     for cls in config.CLASS_NAMES:
-        class_dir = config.RAW_DIR / cls
-        if not class_dir.is_dir():
-            raise FileNotFoundError(
-                f"{class_dir} not found. Run: python src/download_dataset.py"
-            )
-        files = _list_valid_images(class_dir)
-        if len(files) < 10:
-            raise ValueError(f"Class '{cls}' has only {len(files)} valid images.")
+        class_dir = raw_source / cls
+        if class_dir.is_dir():
+            class_images[cls] = _list_valid_images(class_dir)
+        else:
+            class_images[cls] = []
 
+    total_valid = sum(len(imgs) for imgs in class_images.values())
+    if total_valid == 0:
+        raise FileNotFoundError(
+            f"{config.RAW_DIR / 'battery'} not found. Run: python src/download_dataset.py"
+        )
+
+    # Warn about missing classes if partial dataset
+    missing = [cls for cls, imgs in class_images.items() if len(imgs) == 0]
+    if missing:
+        print(f"Notice: {len(missing)} of 12 classes not found in raw data ({', '.join(missing)}). Empty partition folders initialized.")
+
+    for cls in config.CLASS_NAMES:
+        files = class_images[cls]
         shuffled = list(files)
         rnd.shuffle(shuffled)
         n = len(shuffled)
-        n_train = int(round(n * train_frac))
-        n_val = int(round(n * val_frac))
-        train_files = shuffled[:n_train]
-        val_files = shuffled[n_train:n_train + n_val]
-        test_files = shuffled[n_train + n_val:]
+
+        if n == 0:
+            train_files, val_files, test_files = [], [], []
+        elif n < 3:
+            train_files = shuffled
+            val_files = shuffled[:1]
+            test_files = shuffled[:1]
+        else:
+            n_train = max(1, int(round(n * train_frac)))
+            n_val = max(1, int(round(n * val_frac)))
+            if n - n_train - n_val < 1:
+                if n_train > 1:
+                    n_train -= 1
+                elif n_val > 1:
+                    n_val -= 1
+            train_files = shuffled[:n_train]
+            val_files = shuffled[n_train:n_train + n_val]
+            test_files = shuffled[n_train + n_val:]
 
         for split_name, split_files in (
             ("train", train_files), ("val", val_files), ("test", test_files)
