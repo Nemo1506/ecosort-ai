@@ -3,6 +3,13 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
 
+# Resilient dataset & model path discovery (handles root or nested workspace execution)
+if not (BASE_DIR / "data" / "raw" / "battery").exists():
+    if (BASE_DIR.parent / "data" / "raw" / "battery").exists():
+        BASE_DIR = BASE_DIR.parent
+    elif (BASE_DIR / "ecosort-ai" / "data" / "raw" / "battery").exists():
+        BASE_DIR = BASE_DIR / "ecosort-ai"
+
 # ---------------------------------------------------------------- paths
 RAW_DIR = BASE_DIR / "data" / "raw"
 PROCESSED_DIR = BASE_DIR / "data" / "processed"

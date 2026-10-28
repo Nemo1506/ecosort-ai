@@ -335,8 +335,15 @@ def get_dataset_counts() -> Tuple[Dict[str, int], int]:
     """Count verified raw images per class."""
     counts = {}
     total = 0
+    raw_dir = config.RAW_DIR
+    if not (raw_dir / "battery").exists():
+        if (config.BASE_DIR.parent / "data" / "raw" / "battery").exists():
+            raw_dir = config.BASE_DIR.parent / "data" / "raw"
+        elif (config.BASE_DIR / "ecosort-ai" / "data" / "raw" / "battery").exists():
+            raw_dir = config.BASE_DIR / "ecosort-ai" / "data" / "raw"
+
     for cls in config.CLASS_NAMES:
-        p = config.RAW_DIR / cls
+        p = raw_dir / cls
         if p.is_dir():
             n = sum(1 for f in p.iterdir() if f.is_file() and f.suffix.lower() in config.IMAGE_EXTENSIONS)
         else:
@@ -349,8 +356,15 @@ def get_dataset_counts() -> Tuple[Dict[str, int], int]:
 def get_split_counts() -> Dict[str, int]:
     """Count images in train, val, and test partitions."""
     result = {"train": 0, "val": 0, "test": 0}
+    proc_dir = config.PROCESSED_DIR
+    if not (proc_dir / "train").exists():
+        if (config.BASE_DIR.parent / "data" / "processed" / "train").exists():
+            proc_dir = config.BASE_DIR.parent / "data" / "processed"
+        elif (config.BASE_DIR / "ecosort-ai" / "data" / "processed" / "train").exists():
+            proc_dir = config.BASE_DIR / "ecosort-ai" / "data" / "processed"
+
     for s in ("train", "val", "test"):
-        d = config.PROCESSED_DIR / s
+        d = proc_dir / s
         if d.is_dir():
             result[s] = sum(1 for f in d.rglob("*") if f.is_file() and f.suffix.lower() in config.IMAGE_EXTENSIONS)
     return result
@@ -565,12 +579,30 @@ with tab_classify:
     selected_image: Optional[Image.Image] = None
     input_caption: str = "Analyzed Photo"
 
+    def get_sample_image_path(cls_name: str) -> Optional[Path]:
+        """Locate verified sample image across available test and raw folders."""
+        for base in (
+            config.TEST_DIR,
+            config.RAW_DIR,
+            config.BASE_DIR.parent / "data" / "processed" / "test",
+            config.BASE_DIR.parent / "data" / "raw",
+            config.BASE_DIR / "ecosort-ai" / "data" / "processed" / "test",
+            config.BASE_DIR / "ecosort-ai" / "data" / "raw",
+        ):
+            cls_p = base / cls_name
+            if cls_p.is_dir():
+                candidates = [f for f in cls_p.iterdir() if f.is_file() and f.suffix.lower() in config.IMAGE_EXTENSIONS]
+                if candidates:
+                    return candidates[0]
+        return None
+
     # 1. Single Photo Mode
     if input_mode == "📁 Single Photo Analysis":
         uploaded_file = st.file_uploader(
             "Drop item image (JPG, PNG, WebP, BMP)",
             type=["jpg", "jpeg", "png", "webp", "bmp"],
             key="classify_uploader",
+            help="Upload an image from your device for instant classification and Grad-CAM explainability.",
         )
         if uploaded_file is not None:
             try:
@@ -578,6 +610,26 @@ with tab_classify:
                 input_caption = uploaded_file.name
             except Exception:
                 st.error("Invalid image format. Please select another file.")
+
+        st.markdown("##### 🧪 Or Click a Verified Sample Item to Test Instantly:")
+        sample_classes = ["battery", "biological", "cardboard", "plastic", "metal", "shoes"]
+        demo_cols = st.columns(len(sample_classes))
+        for idx, cls in enumerate(sample_classes):
+            sample_file = get_sample_image_path(cls)
+            if sample_file:
+                with demo_cols[idx]:
+                    cls_emoji = guide.get(cls, {}).get("emoji", "📦")
+                    btn_label = f"{cls_emoji} {cls.title()}"
+                    if st.button(btn_label, key=f"quick_demo_s_{cls}", use_container_width=True):
+                        st.session_state["demo_sample_path"] = str(sample_file)
+
+        if uploaded_file is None and "demo_sample_path" in st.session_state and Path(st.session_state["demo_sample_path"]).exists():
+            try:
+                selected_image = Image.open(st.session_state["demo_sample_path"])
+                input_caption = Path(st.session_state["demo_sample_path"]).name
+                st.info(f"Loaded verified item: `{input_caption}` (Drop a photo above anytime to test custom items)")
+            except Exception:
+                pass
 
     # 2. Multi-Item Batch Auditor Mode
     elif input_mode == "📦 Multi-Item Batch Auditor":
@@ -747,21 +799,35 @@ with tab_classify:
         sample_classes = ["battery", "biological", "cardboard", "plastic", "metal", "shoes"]
         demo_cols = st.columns(len(sample_classes))
         for idx, cls in enumerate(sample_classes):
-            cls_dir = config.TEST_DIR / cls if (config.TEST_DIR / cls).is_dir() else (config.RAW_DIR / cls)
-            if cls_dir.is_dir():
-                img_candidates = list(cls_dir.glob("*.jpg")) + list(cls_dir.glob("*.png"))
-                if img_candidates:
-                    sample_file = img_candidates[0]
-                    with demo_cols[idx]:
-                        cls_emoji = guide.get(cls, {}).get("emoji", "📦")
-                        btn_label = f"{cls_emoji} {cls.title()}"
-                        if st.button(btn_label, key=f"quick_demo_{cls}", width="stretch"):
-                            st.session_state["demo_sample_path"] = str(sample_file)
+            sample_file = get_sample_image_path(cls)
+            if sample_file:
+                with demo_cols[idx]:
+                    cls_emoji = guide.get(cls, {}).get("emoji", "📦")
+                    btn_label = f"{cls_emoji} {cls.title()}"
+                    if st.button(btn_label, key=f"quick_demo_{cls}", use_container_width=True):
+                        st.session_state["demo_sample_path"] = str(sample_file)
 
         if "demo_sample_path" in st.session_state and Path(st.session_state["demo_sample_path"]).exists():
-            selected_image = Image.open(st.session_state["demo_sample_path"])
-            input_caption = Path(st.session_state["demo_sample_path"]).name
-            st.info(f"Loaded verified item: `{input_caption}`")
+            try:
+                selected_image = Image.open(st.session_state["demo_sample_path"])
+                input_caption = Path(st.session_state["demo_sample_path"]).name
+                st.info(f"Loaded verified item: `{input_caption}`")
+            except Exception:
+                pass
+
+        st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
+        uploaded_quick = st.file_uploader(
+            "📁 Or Upload Your Own Waste Item Image (JPG, PNG, WebP, BMP)",
+            type=["jpg", "jpeg", "png", "webp", "bmp"],
+            key="quick_mode_uploader",
+            help="Upload your own waste photo for instant classification and Grad-CAM attention map.",
+        )
+        if uploaded_quick is not None:
+            try:
+                selected_image = Image.open(uploaded_quick)
+                input_caption = uploaded_quick.name
+            except Exception:
+                st.error("Invalid image format. Please select another file.")
 
     # Single Image Inference & Grad-CAM Pipeline
     if selected_image is not None:
@@ -994,7 +1060,18 @@ with tab_classify:
                     width="stretch",
                 )
     else:
-        st.info("👆 Upload an image, launch a batch audit, use the camera, or choose a quick-test sample item above to begin classification.")
+        st.markdown(
+            """
+            <div class="glass-card" style="text-align:center; padding: 36px 20px; margin-top: 16px; border: 1px dashed rgba(16, 185, 129, 0.4);">
+                <div style="font-size:2.2rem; margin-bottom:8px;">♻️ 📸</div>
+                <div style="font-size:1.15rem; font-weight:700; color:#34d399; margin-bottom:6px;">Ready for Waste Material Analysis</div>
+                <div style="font-size:0.9rem; color:#94a3b8; max-width:620px; margin:0 auto 12px auto;">
+                    Drop an item photograph into the upload zone above, or click any verified sample item (<b>Battery, Plastic, Cardboard, Metal, Shoes</b>) to instantly view real-time neural classification, explainable Grad-CAM heatmaps, and localized municipal bin allocation.
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
 
 # =============================================================================
